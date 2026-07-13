@@ -75,12 +75,24 @@ function App() {
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   
-  // Admin Credential Management (change from within settings)
-  const [savedAdminUser, setSavedAdminUser] = useState('admin');
-  const [savedAdminPass, setSavedAdminPass] = useState('alostora2025');
+  // Admin Credential Management (with localStorage survival)
+  const [savedAdminUser, setSavedAdminUser] = useState(() => localStorage.getItem('savedAdminUser') || 'admin');
+  const [savedAdminPass, setSavedAdminPass] = useState(() => localStorage.getItem('savedAdminPass') || 'alostora2025');
   const [newAdminUser, setNewAdminUser] = useState('');
   const [newAdminPass, setNewAdminPass] = useState('');
   const [newAdminPassConfirm, setNewAdminPassConfirm] = useState('');
+
+  // Save admin credentials updates to localStorage
+  const updateAdminCredentials = (user: string, pass: string) => {
+    if (user) {
+      setSavedAdminUser(user);
+      localStorage.setItem('savedAdminUser', user);
+    }
+    if (pass) {
+      setSavedAdminPass(pass);
+      localStorage.setItem('savedAdminPass', pass);
+    }
+  };
   
   // Bulk Shipping States
   const [bulkShippingRate, setBulkShippingRate] = useState('');
@@ -2828,8 +2840,7 @@ function App() {
                           alert('يجب أن تكون كلمة المرور 6 أحرف على الأقل.');
                           return;
                         }
-                        if (newAdminUser) setSavedAdminUser(newAdminUser);
-                        if (newAdminPass) setSavedAdminPass(newAdminPass);
+                        updateAdminCredentials(newAdminUser, newAdminPass);
                         setNewAdminUser('');
                         setNewAdminPass('');
                         setNewAdminPassConfirm('');
@@ -2872,7 +2883,6 @@ function App() {
               <button onClick={() => { setActiveTab('contact'); }} className="text-indigo-600 hover:underline cursor-pointer">اتصل بنا</button>
             </div>
           </div>
-        </div>
         </div>
       </footer>
 
