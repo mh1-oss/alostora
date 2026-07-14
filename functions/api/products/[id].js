@@ -1,4 +1,4 @@
-import { getDbClient } from './_db.js';
+import { getDbClient } from '../_db.js';
 
 // PUT /api/products/[id]
 // DELETE /api/products/[id]
