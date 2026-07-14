@@ -450,9 +450,12 @@ function App() {
     }
 
     // WhatsApp Message Integration
-    const orderItemsText = cart.map(item => 
-      `- ${item.product.title} (الكمية: ${item.quantity}) - $${item.product.price * item.quantity}`
-    ).join('\n');
+    const orderItemsText = cart.map(item => {
+      const activePrice = item.product.discount_price && Number(item.product.discount_price) > 0 
+        ? Number(item.product.discount_price) 
+        : item.product.price;
+      return `- ${item.product.title} (الكمية: ${item.quantity}) - ${formatIQD(activePrice * item.quantity)}`;
+    }).join('\n');
 
     const whatsappMessage = encodeURIComponent(
       `مرحباً متجر الأسطورة للحاسبات 💻\n` +
@@ -462,9 +465,9 @@ function App() {
       `📍 المحافظة: ${selectedProvince}\n` +
       `📍 العنوان بالتفصيل: ${checkoutForm.address}\n\n` +
       `📦 تفاصيل الطلب:\n${orderItemsText}\n\n` +
-      `💵 المجموع الفرعي: $${cartTotal}\n` +
-      `🚚 تكلفة التوصيل: $${deliveryCost}\n` +
-      `💵 الإجمالي الكلي: $${finalCartTotal}\n\n` +
+      `💵 المجموع الفرعي: ${formatIQD(cartTotal)}\n` +
+      `🚚 تكلفة التوصيل: ${formatIQD(deliveryCost)}\n` +
+      `💵 الإجمالي الكلي: ${formatIQD(finalCartTotal * exchangeRate)}\n\n` +
       `شكراً لكم، بانتظار تأكيد التوصيل!`
     );
 
@@ -2036,7 +2039,7 @@ function App() {
                     </div>
                     <div className="flex justify-between items-center text-gray-500">
                       <span>تكلفة التوصيل إلى {selectedProvince}:</span>
-                      <span>{formatIQD(deliveryCostIQD)}</span>
+                      <span>{formatIQD(deliveryCost)}</span>
                     </div>
                     <div className="border-t border-gray-200 my-2"></div>
                     <div className="flex justify-between items-center text-sm font-black text-gray-900">
@@ -2572,7 +2575,7 @@ function App() {
                         const cleanPhone = o.customer_phone.startsWith('0') ? '964' + o.customer_phone.slice(1) : o.customer_phone;
                         const whatsAppMsg = encodeURIComponent(
                           `مرحباً أستاذ ${o.customer_name} 💻\n` +
-                          `معك إدارة متجر الأسطورة للحاسبات بخصوص طلبك رقم #${o.id} بقيمة $${o.total_price}.\n` +
+                          `معك إدارة متجر الأسطورة للحاسبات بخصوص طلبك رقم #${o.id} بقيمة ${formatIQD(o.total_price * exchangeRate)}.\n` +
                           `نود تأكيد الطلب وعنوان التوصيل: (${o.customer_address}) لإرسال المنتج مباشرة!`
                         );
                           return (
@@ -2588,7 +2591,7 @@ function App() {
                                   <span className="bg-indigo-50 text-indigo-650 text-[9px] font-extrabold px-2 py-0.5 rounded-full block mb-1">
                                     فاتورة رقم #{o.id}
                                   </span>
-                                  <span className="text-base font-black text-indigo-600">${o.total_price}</span>
+                                  <span className="text-base font-black text-indigo-600">{formatIQD(o.total_price * exchangeRate)}</span>
                                 </div>
                               </div>
 
