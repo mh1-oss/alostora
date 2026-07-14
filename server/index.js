@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import jwt from 'jsonwebtoken';
+import https from 'https';
 import { pool, sql, initDB } from './db.js';
 
 const app = express();
@@ -182,6 +183,9 @@ let tempProducts = [
 ];
 
 let tempOrders = [];
+// مخزن بيانات الطلبات مرتبطة بـ message_id التليغرام
+// يُستخدم من طرف نظام Polling لمعرفة بيانات الطلب عند ضغط زر التجهيز
+const orderStore = new Map(); // key: telegram message_id, value: order data
 
 // Initialize Database connection & tables
 initDB();
@@ -267,81 +271,131 @@ app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// مساعد إرسال رسالة لتليغرام مع استرجاع الرد
+function tgPost(botToken, path, body) {
+  return new Promise((resolve, reject) => {
+    const postData = JSON.stringify(body);
+    const req = https.request({
+      hostname: 'api.telegram.org', port: 443,
+      path: `/bot${botToken}/${path}`, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    }, res => {
+      let d = ''; res.on('data', c => d += c);
+      res.on('end', () => { try { resolve(JSON.parse(d)); } catch(e) { reject(e); } });
+    });
+    req.on('error', reject); req.write(postData); req.end();
+  });
+}
 
-// 5. Submit new order
+// 5. إرسال طلب جديد (بدون تخزين Neon - كل شيء في التليغرام)
 app.post('/api/orders', async (req, res) => {
   const { customer_name, customer_phone, customer_address, total_price, items } = req.body;
 
-  if (!pool) {
-    const newOrder = {
-      id: tempOrders.length + 1,
-      customer_name,
-      customer_phone,
-      customer_address,
-      total_price: parseFloat(total_price),
-      status: 'pending',
-      items,
-      created_at: new Date().toISOString()
-    };
-    tempOrders.push(newOrder);
+  const newOrder = {
+    id: Date.now(), // ID فريد بدون DB
+    customer_name,
+    customer_phone,
+    customer_address,
+    total_price: parseFloat(total_price),
+    status: 'pending',
+    items,
+    created_at: new Date().toISOString()
+  };
+  tempOrders.push(newOrder);
 
-    // Decrement local stock
-    items.forEach(item => {
-      const prod = tempProducts.find(p => p.id === item.id);
-      if (prod) {
-        prod.stock = Math.max(0, prod.stock - item.quantity);
-      }
-    });
-
-    return res.status(201).json(newOrder);
-  }
-
-  try {
-    const client = await pool.connect();
+  // تحديث الكميات في الذاكرة
+  if (pool) {
     try {
-      await client.query('BEGIN');
-
-      // Create Order
-      const orderRes = await client.query(
-        'INSERT INTO orders (customer_name, customer_phone, customer_address, total_price, items) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [customer_name, customer_phone, customer_address, total_price, JSON.stringify(items)]
-      );
-
-      // Update stocks
       for (const item of items) {
-        await client.query(
+        await pool.query(
           'UPDATE products SET stock = GREATEST(0, stock - $1) WHERE id = $2',
           [item.quantity, item.id]
         );
       }
-
-      await client.query('COMMIT');
-      res.status(201).json(orderRes.rows[0]);
-    } catch (e) {
-      await client.query('ROLLBACK');
-      throw e;
-    } finally {
-      client.release();
-    }
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "حدث خطأ أثناء حفظ الطلب" });
+    } catch(e) { console.warn('Stock update failed:', e.message); }
+  } else {
+    items.forEach(item => {
+      const prod = tempProducts.find(p => p.id === item.id);
+      if (prod) prod.stock = Math.max(0, prod.stock - item.quantity);
+    });
   }
-});
 
-// 6. Get all orders (Admin)
-app.get('/api/orders', authenticateToken, async (req, res) => {
-  if (!pool) {
-    return res.json(tempOrders.slice().reverse());
-  }
+  // إرسال إشعار تليغرام وتخزين message_id
   try {
-    const result = await pool.query('SELECT * FROM orders ORDER BY id DESC');
-    res.json(result.rows);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "حدث خطأ أثناء جلب الطلبات" });
+    let botToken = null, chatId = null;
+    if (sql) {
+      const rows = await sql.query("SELECT key, value FROM store_settings WHERE key IN ('telegram_bot_token', 'telegram_chat_id')");
+      const s = {}; rows.forEach(r => { s[r.key] = r.value; });
+      botToken = s['telegram_bot_token']; chatId = s['telegram_chat_id'];
+    }
+
+    console.log('[Telegram] botToken:', botToken ? '✅ موجود' : '❌ غير موجود', '| chatId:', chatId ? '✅ موجود' : '❌ غير موجود');
+
+    if (botToken && chatId) {
+      const itemsList = items.map(it => `- ${it.title} (${it.quantity} قطعة) = ${Number(it.price * it.quantity).toLocaleString('en-US')} د.ع`).join('\n');
+      const totalIQD = Math.round(Number(newOrder.total_price)).toLocaleString('en-US');
+
+      const text =
+        `🔔 *طلب جديد وارد!*\n\n` +
+        `👤 *الزبون:* ${customer_name}\n` +
+        `📞 *الهاتف:* \`${customer_phone}\`\n` +
+        `📍 *العنوان:* ${customer_address}\n\n` +
+        `📦 *تفاصيل الطلب:*\n${itemsList}\n\n` +
+        `💵 *الإجمالي:* ${totalIQD} د.ع\n\n` +
+        `اضغط زر التجهيز عند الاستعداد:`;
+
+      const tgResp = await tgPost(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text,
+        parse_mode: 'Markdown',
+        reply_markup: {
+          inline_keyboard: [[
+            { text: '📦 تجهيز الطلب', callback_data: `prepare:${newOrder.id}` }
+          ]]
+        }
+      });
+
+      console.log('[Telegram] sendMessage result:', JSON.stringify(tgResp).substring(0, 300));
+
+      // تخزين بيانات الطلب في orderStore مرتبطة بـ message_id
+      if (tgResp.ok && tgResp.result) {
+        const msgId = tgResp.result.message_id;
+        orderStore.set(msgId, {
+          id: newOrder.id,
+          customer_name,
+          customer_phone,
+          customer_address,
+          total_price: newOrder.total_price,
+          items
+        });
+        console.log(`🔔 [Telegram] Order #${newOrder.id} sent, msg_id: ${msgId}`);
+      }
+    }
+  } catch (tgErr) {
+    console.error('Telegram send error:', tgErr.message);
   }
+
+  res.status(201).json(newOrder);
 });
+
+// 6. جلب جميع الطلبات (من الذاكرة - بدون Neon)
+app.get('/api/orders', authenticateToken, (req, res) => {
+  res.json(tempOrders.slice().reverse());
+});
+
+// تحديث حالة الطلب (من الذاكرة)
+app.put('/api/orders/:id/status', authenticateToken, (req, res) => {
+  const { id } = req.params;
+  const { status } = req.body;
+  const order = tempOrders.find(o => String(o.id) === String(id));
+  if (!order) return res.status(404).json({ error: 'الطلب غير موجود' });
+  order.status = status;
+  res.json(order);
+});
+
+
+// Telegram Bot Webhook route (kept for compatibility, actual processing via polling below)
+app.post('/api/telegram-webhook', (req, res) => res.sendStatus(200));
 
 // 7. Get stats (Admin)
 app.get('/api/stats', authenticateToken, async (req, res) => {
@@ -371,19 +425,19 @@ app.get('/api/stats', authenticateToken, async (req, res) => {
 
 // 8. Categories API Endpoints (GET, POST, PUT, DELETE)
 let tempCategories = [
-  { id: 'gaming', name: '🎮 ألعاب - Gaming', type: 'laptop' },
-  { id: 'ultrabook', name: '💼 خفيف ونحيف - Ultrabook', type: 'laptop' },
-  { id: 'office', name: '🖥️ مكتبي - Office', type: 'laptop' },
-  { id: 'workstation', name: '⚙️ محطة عمل - Workstation', type: 'laptop' },
-  { id: '2in1', name: '🔄 قابل للطي - 2-in-1', type: 'laptop' },
-  { id: 'mouse', name: '🖱️ فأرة - Mouse', type: 'accessory' },
-  { id: 'keyboard', name: '⌨️ لوحة مفاتيح - Keyboard', type: 'accessory' },
-  { id: 'headset', name: '🎧 سماعة - Headset', type: 'accessory' },
-  { id: 'monitor', name: '🖥️ شاشة - Monitor', type: 'accessory' },
-  { id: 'bag', name: '🎒 حقيبة - Bag', type: 'accessory' },
-  { id: 'cooling', name: '🌀 تبريد - Cooling', type: 'accessory' },
-  { id: 'hub', name: '🔌 موزع منافذ - Hub', type: 'accessory' },
-  { id: 'mousepad', name: '⬛ لوحة فأرة - Mousepad', type: 'accessory' }
+  { id: 'gaming', name: 'ألعاب', type: 'laptop' },
+  { id: 'ultrabook', name: 'خفيف ونحيف', type: 'laptop' },
+  { id: 'office', name: 'مكتبي', type: 'laptop' },
+  { id: 'workstation', name: 'محطة عمل', type: 'laptop' },
+  { id: '2in1', name: 'قابل للطي', type: 'laptop' },
+  { id: 'mouse', name: 'فأرة (ماوس)', type: 'accessory' },
+  { id: 'keyboard', name: 'لوحة مفاتيح', type: 'accessory' },
+  { id: 'headset', name: 'سماعات', type: 'accessory' },
+  { id: 'monitor', name: 'شاشات', type: 'accessory' },
+  { id: 'bag', name: 'حقائب', type: 'accessory' },
+  { id: 'cooling', name: 'تبريد', type: 'accessory' },
+  { id: 'hub', name: 'موزع منافذ', type: 'accessory' },
+  { id: 'mousepad', name: 'لوحة فأرة (ماوس باد)', type: 'accessory' }
 ];
 
 app.get('/api/categories', async (req, res) => {
@@ -441,7 +495,9 @@ const defaultSettings = {
   phone_number: '+964 780 181 4088',
   store_address: 'بغداد، شارع الصناعة، مجمع الحاسبات',
   budget_limit_low: '900',
-  budget_limit_high: '1300'
+  budget_limit_high: '1300',
+  telegram_bot_token: '8716178157:AAF3XbstprNyL6Mt2aMNjatPLTogO_abfik',
+  telegram_chat_id: '267707743'
 };
 let tempSettings = { ...defaultSettings };
 
@@ -483,6 +539,180 @@ app.put('/api/settings', async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
+// ─── Telegram Long Polling ────────────────────────────────────────────────────
+// يعمل تلقائياً بدون webhook — السيرفر يسأل تليغرام كل ثانيتين بنفسه
+async function processTelegramUpdate(update, botToken, chatId) {
+  const callback_query = update.callback_query;
+  if (!callback_query || !callback_query.data) return;
+
+  const data = callback_query.data;
+  const msgId = callback_query.message.message_id;
+
+  // تجاهل الضغطات المتكررة (noop)
+  if (data === 'noop') {
+    await tgPost(botToken, 'answerCallbackQuery', {
+      callback_query_id: callback_query.id,
+      text: '✅ هذا الطلب تم تجهيزه مسبقاً'
+    });
+    return;
+  }
+
+  if (!data.startsWith('prepare:')) return;
+
+  const orderId = data.split(':')[1];
+
+  // جلب بيانات الطلب من orderStore
+  const order = orderStore.get(msgId);
+  if (!order) {
+    await tgPost(botToken, 'answerCallbackQuery', {
+      callback_query_id: callback_query.id,
+      text: '⚠️ لم يتم العثور على بيانات الطلب (ربما أُعيد تشغيل السيرفر)'
+    });
+    return;
+  }
+
+  try {
+    // تحديث الحالة في الذاكرة
+    const memOrder = tempOrders.find(o => String(o.id) === String(order.id));
+    if (memOrder) memOrder.status = 'prepared';
+
+    // 1. الرد على callback لإزالة "loading..."
+    await tgPost(botToken, 'answerCallbackQuery', {
+      callback_query_id: callback_query.id,
+      text: '✅ تم تجهيز الطلب بنجاح!'
+    });
+
+    // 2. بناء رابط واتساب للزبون
+    const cleanPhone = order.customer_phone.startsWith('0')
+      ? '964' + order.customer_phone.slice(1)
+      : order.customer_phone.replace(/^\+/, '');
+    const totalIQD = Math.round(Number(order.total_price)).toLocaleString('en-US');
+
+    const itemsList = Array.isArray(order.items)
+      ? order.items.map(it => `• ${it.title} (${it.quantity} قطعة)`).join('\n')
+      : '';
+
+    const whatsAppMsg = encodeURIComponent(
+      `✅ تم تجهيز طلبك - متجر الأسطورة للحاسبات\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `مرحباً أستاذ ${order.customer_name} 😊\n\n` +
+      `يسعدنا إعلامك بأن طلبك قد تم تجهيزه وتغليفه بنجاح! 📦\n\n` +
+      (itemsList ? `📋 تفاصيل طلبك:\n${itemsList}\n\n` : '') +
+      `📍 العنوان: ${order.customer_address}\n` +
+      `💰 الإجمالي: ${totalIQD} د.ع\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `🚚 سيتم تسليمه قريباً عبر شركة التوصيل\n` +
+      `شكراً لثقتك بنا! 🙏`
+    );
+    const waLink = `https://wa.me/${cleanPhone}?text=${whatsAppMsg}`;
+
+    // 3. تعديل رسالة التليغرام: زر "✅ تم التجهيز" + زر واتساب
+    const esc = (s) => String(s).replace(/[_*[\]()~`>#+\-=|{}.!]/g, '\\$&');
+
+    const itemsListForTg = Array.isArray(order.items)
+      ? order.items.map(it => `• ${esc(it.title)} \\(${it.quantity} قطعة\\) \\- ${Number(it.price).toLocaleString('en-US')} د\\.ع`).join('\n')
+      : '';
+
+    const updatedText =
+      `✅ *تم التجهيز بنجاح\\!*\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `👤 *الزبون:* ${esc(order.customer_name)}\n` +
+      `📞 *الهاتف:* \`${order.customer_phone}\`\n` +
+      `📍 *العنوان:* ${esc(order.customer_address)}\n\n` +
+      (itemsListForTg ? `📦 *تفاصيل الطلب:*\n${itemsListForTg}\n\n` : '') +
+      `💵 *الإجمالي:* ${totalIQD} د\\.ع\n\n` +
+      `⬇️ اضغط زر واتساب لإبلاغ الزبون:`;
+
+    await tgPost(botToken, 'editMessageText', {
+      chat_id: chatId,
+      message_id: msgId,
+      text: updatedText,
+      parse_mode: 'MarkdownV2',
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '✅ تم التجهيز', callback_data: 'noop' }],
+          [{ text: '💬 إبلاغ الزبون عبر واتساب', url: waLink }]
+        ]
+      }
+    });
+
+    // حذف من orderStore بعد التجهيز
+    orderStore.delete(msgId);
+    console.log(`✅ [Telegram] Order #${orderId} prepared`);
+  } catch (e) {
+    console.error('Telegram polling handler error:', e.message);
+  }
+}
+
+
+async function startTelegramPolling() {
+  if (!sql) return; // لا داعي للبوت بدون قاعدة بيانات
+
+  let offset = 0;
+  let botToken = null;
+  let chatId = null;
+
+  const fetchSettings = async () => {
+    try {
+      const rows = await sql.query("SELECT key, value FROM store_settings WHERE key IN ('telegram_bot_token', 'telegram_chat_id')");
+      const s = {};
+      rows.forEach(r => { s[r.key] = r.value; });
+      botToken = s['telegram_bot_token'] || null;
+      chatId = s['telegram_chat_id'] || null;
+    } catch(e) {}
+  };
+
+  await fetchSettings();
+
+  const poll = () => {
+    if (!botToken) {
+      // إعادة المحاولة بعد 10 ثوان إذا لم يُضبط التوكن بعد
+      setTimeout(async () => { await fetchSettings(); poll(); }, 10000);
+      return;
+    }
+
+    const postData = JSON.stringify({ offset, timeout: 30, allowed_updates: ['callback_query'] });
+    const req = https.request({
+      hostname: 'api.telegram.org',
+      port: 443,
+      path: `/bot${botToken}/getUpdates`,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) }
+    }, res => {
+      let body = '';
+      res.on('data', chunk => body += chunk);
+      res.on('end', async () => {
+        try {
+          const json = JSON.parse(body);
+          if (json.ok && json.result.length > 0) {
+            for (const update of json.result) {
+              offset = update.update_id + 1;
+              await processTelegramUpdate(update, botToken, chatId);
+            }
+          }
+        } catch (e) {
+          console.error('Telegram polling parse error:', e.message);
+        }
+        // إعادة الاتصال فوراً
+        setImmediate(poll);
+      });
+    });
+    req.on('error', (e) => {
+      console.error('Telegram polling request error:', e.message);
+      // إعادة المحاولة بعد 5 ثوان عند الخطأ
+      setTimeout(poll, 5000);
+    });
+    req.write(postData);
+    req.end();
+  };
+
+  console.log('🤖 Telegram Long Polling started...');
+  poll();
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
+app.listen(PORT, async () => {
   console.log(`🚀 الخادم يعمل على المنفذ http://localhost:${PORT}`);
+  // تشغيل بوت التليغرام بالـ Polling تلقائياً
+  startTelegramPolling();
 });

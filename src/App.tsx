@@ -40,7 +40,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
   // Navigation & UI States
-  const [activeTab, setActiveTab] = useState<'home' | 'laptops' | 'accessories' | 'smart-finder' | 'contact' | 'product-detail' | 'admin' | 'cart'>('home');
+  const [activeTab, setActiveTab] = useState<'home' | 'laptops' | 'accessories' | 'smart-finder' | 'contact' | 'product-detail' | 'admin' | 'cart' | 'my-orders' | 'order-success'>('home');
   
   // Currency States
   const [currency, setCurrency] = useState<'USD' | 'IQD'>('IQD');
@@ -59,6 +59,13 @@ function App() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [isMyOrdersOpen, setIsMyOrdersOpen] = useState(false);
+  const [myOrders, setMyOrders] = useState<any[]>([]);
+  const [lastCompletedOrder, setLastCompletedOrder] = useState<any | null>(null);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [categoryToDelete, setCategoryToDelete] = useState<any | null>(null);
+  const [isCategoryDeleteModalOpen, setIsCategoryDeleteModalOpen] = useState(false);
   
   // Data States
   const [products, setProducts] = useState<Product[]>([]);
@@ -74,6 +81,11 @@ function App() {
   const [adminSubTab, setAdminSubTab] = useState<'products' | 'orders' | 'categories' | 'shipping' | 'settings'>('products');
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+  
+  // Customizable Main Category Names
+  const [mainCatLaptopName, setMainCatLaptopName] = useState('أجهزة اللابتوب');
+  const [mainCatAccessoryName, setMainCatAccessoryName] = useState('الإكسسوارات والملحقات');
+  const [mainCatHomeName, setMainCatHomeName] = useState('عروض الصفحة الرئيسية');
   
   // Store settings from DB (no localStorage)
   const [savedAdminUser, setSavedAdminUser] = useState('admin');
@@ -114,15 +126,23 @@ function App() {
     } catch (e) { console.warn('Could not save budget limits to DB'); }
   };
 
+  // Telegram Bot Settings from DB
+  const [telegramBotToken, setTelegramBotToken] = useState('8716178157:AAF3XbstprNyL6Mt2aMNjatPLTogO_abfik');
+  const [telegramChatId, setTelegramChatId] = useState('267707743');
+  const [editTelegramBotToken, setEditTelegramBotToken] = useState('');
+  const [editTelegramChatId, setEditTelegramChatId] = useState('');
+
   // Save contact info to DB
-  const saveContactInfo = async (whatsapp: string, phone: string, address: string) => {
+  const saveContactInfo = async (whatsapp: string, phone: string, address: string, botToken?: string, chatId?: string) => {
     const updates: Record<string, string> = {};
     if (whatsapp.trim()) { updates['whatsapp_number'] = whatsapp.trim(); setStoreWhatsApp(whatsapp.trim()); }
     if (phone.trim()) { updates['phone_number'] = phone.trim(); setStorePhone(phone.trim()); }
     if (address.trim()) { updates['store_address'] = address.trim(); setStoreAddress(address.trim()); }
+    if (botToken && botToken.trim()) { updates['telegram_bot_token'] = botToken.trim(); setTelegramBotToken(botToken.trim()); }
+    if (chatId && chatId.trim()) { updates['telegram_chat_id'] = chatId.trim(); setTelegramChatId(chatId.trim()); }
     if (Object.keys(updates).length > 0) {
       try { await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); }
-      catch (e) { console.warn('Could not save contact info to DB'); }
+      catch (e) { console.warn('Could not save contact/telegram info to DB'); }
     }
   };
   
@@ -217,19 +237,19 @@ function App() {
   });
 
   const fallbackCategories: any[] = [
-    { id: 'gaming', name: '🎮 ألعاب - Gaming', type: 'laptop' },
-    { id: 'ultrabook', name: '💼 خفيف ونحيف - Ultrabook', type: 'laptop' },
-    { id: 'office', name: '🖥️ مكتبي - Office', type: 'laptop' },
-    { id: 'workstation', name: '⚙️ محطة عمل - Workstation', type: 'laptop' },
-    { id: '2in1', name: '🔄 قابل للطي - 2-in-1', type: 'laptop' },
-    { id: 'mouse', name: '🖱️ فأرة - Mouse', type: 'accessory' },
-    { id: 'keyboard', name: '⌨️ لوحة مفاتيح - Keyboard', type: 'accessory' },
-    { id: 'headset', name: '🎧 سماعة - Headset', type: 'accessory' },
-    { id: 'monitor', name: '🖥️ شاشة - Monitor', type: 'accessory' },
-    { id: 'bag', name: '🎒 حقيبة - Bag', type: 'accessory' },
-    { id: 'cooling', name: '🌀 تبريد - Cooling', type: 'accessory' },
-    { id: 'hub', name: '🔌 موزع منافذ - Hub', type: 'accessory' },
-    { id: 'mousepad', name: '⬛ لوحة فأرة - Mousepad', type: 'accessory' }
+    { id: 'gaming', name: 'ألعاب', type: 'laptop' },
+    { id: 'ultrabook', name: 'خفيف ونحيف', type: 'laptop' },
+    { id: 'office', name: 'مكتبي', type: 'laptop' },
+    { id: 'workstation', name: 'محطة عمل', type: 'laptop' },
+    { id: '2in1', name: 'قابل للطي', type: 'laptop' },
+    { id: 'mouse', name: 'فأرة (ماوس)', type: 'accessory' },
+    { id: 'keyboard', name: 'لوحة مفاتيح', type: 'accessory' },
+    { id: 'headset', name: 'سماعات', type: 'accessory' },
+    { id: 'monitor', name: 'شاشات', type: 'accessory' },
+    { id: 'bag', name: 'حقائب', type: 'accessory' },
+    { id: 'cooling', name: 'تبريد', type: 'accessory' },
+    { id: 'hub', name: 'موزع منافذ', type: 'accessory' },
+    { id: 'mousepad', name: 'لوحة فأرة (ماوس باد)', type: 'accessory' }
   ];
 
   const fetchCategories = async () => {
@@ -260,9 +280,30 @@ function App() {
         if (data.store_address) setStoreAddress(data.store_address);
         if (data.budget_limit_low) setBudgetLimitLow(parseInt(data.budget_limit_low, 10));
         if (data.budget_limit_high) setBudgetLimitHigh(parseInt(data.budget_limit_high, 10));
+        if (data.telegram_bot_token) setTelegramBotToken(data.telegram_bot_token);
+        if (data.telegram_chat_id) setTelegramChatId(data.telegram_chat_id);
+        if (data.main_cat_laptop_name) setMainCatLaptopName(data.main_cat_laptop_name);
+        if (data.main_cat_accessory_name) setMainCatAccessoryName(data.main_cat_accessory_name);
+        if (data.main_cat_home_name) setMainCatHomeName(data.main_cat_home_name);
       }
     } catch (e) {
       console.warn('Could not fetch settings from DB, using defaults.');
+    }
+  };
+
+  const saveMainCategoryName = async (key: string, newName: string) => {
+    if (!newName.trim()) return;
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [key]: newName.trim() })
+      });
+      if (response.ok) {
+        fetchSettings();
+      }
+    } catch (e) {
+      alert("فشل تحديث اسم القسم الرئيسي.");
     }
   };
 
@@ -399,9 +440,9 @@ function App() {
       : item.product.price;
     return sum + activePrice * item.quantity;
   }, 0);
-  // shippingRates stored in IQD — no conversion needed since pricing is fully in IQD
+  // shippingRates stored in IQD — all prices fully in IQD
   const deliveryCost = shippingRates[selectedProvince] || 0;
-  const finalCartTotal = cartTotal + (deliveryCost / exchangeRate);
+  const finalCartTotal = cartTotal + deliveryCost;
 
   // Compare Functions
   const toggleCompare = (product: Product) => {
@@ -426,7 +467,9 @@ function App() {
       return;
     }
 
+    const invoiceId = `AST-${Date.now().toString().slice(-6)}`;
     const orderPayload = {
+      id: invoiceId,
       customer_name: checkoutForm.name,
       customer_phone: checkoutForm.phone,
       customer_address: `${selectedProvince} - ${checkoutForm.address}`,
@@ -434,10 +477,25 @@ function App() {
       items: cart.map(item => ({
         id: item.product.id,
         title: item.product.title,
-        price: item.product.price,
+        price: item.product.discount_price && Number(item.product.discount_price) > 0
+          ? Number(item.product.discount_price)
+          : item.product.price,
         quantity: item.quantity
       }))
     };
+
+    // حفظ الفاتورة في الـ localStorage للزبون
+    try {
+      const existingOrders = JSON.parse(localStorage.getItem('my_orders') || '[]');
+      existingOrders.push({
+        ...orderPayload,
+        date: new Date().toLocaleDateString('ar-IQ'),
+        status: 'pending'
+      });
+      localStorage.setItem('my_orders', JSON.stringify(existingOrders));
+    } catch (err) {
+      console.error("Failed to save to localStorage", err);
+    }
 
     try {
       await fetch('/api/orders', {
@@ -449,35 +507,21 @@ function App() {
       console.warn("Offline order submission.");
     }
 
-    // WhatsApp Message Integration
-    const orderItemsText = cart.map(item => {
-      const activePrice = item.product.discount_price && Number(item.product.discount_price) > 0 
-        ? Number(item.product.discount_price) 
-        : item.product.price;
-      return `- ${item.product.title} (الكمية: ${item.quantity}) - ${formatIQD(activePrice * item.quantity)}`;
-    }).join('\n');
-
-    const whatsappMessage = encodeURIComponent(
-      `مرحباً متجر الأسطورة للحاسبات 💻\n` +
-      `أود تقديم طلب شراء جديد:\n\n` +
-      `👤 العميل: ${checkoutForm.name}\n` +
-      `📞 الهاتف: ${checkoutForm.phone}\n` +
-      `📍 المحافظة: ${selectedProvince}\n` +
-      `📍 العنوان بالتفصيل: ${checkoutForm.address}\n\n` +
-      `📦 تفاصيل الطلب:\n${orderItemsText}\n\n` +
-      `💵 المجموع الفرعي: ${formatIQD(cartTotal)}\n` +
-      `🚚 تكلفة التوصيل: ${formatIQD(deliveryCost)}\n` +
-      `💵 الإجمالي الكلي: ${formatIQD(finalCartTotal * exchangeRate)}\n\n` +
-      `شكراً لكم، بانتظار تأكيد التوصيل!`
-    );
-
-    window.open(`https://wa.me/${storeWhatsApp}?text=${whatsappMessage}`, '_blank');
-
+    // إغلاق السلة وإعادة التعيين
     setCart([]);
     setIsCheckoutOpen(false);
     setIsCartOpen(false);
     fetchProducts();
+
+    // حفظ الفاتورة الحالية لعرضها في صفحة النجاح
+    setLastCompletedOrder({
+      ...orderPayload,
+      deliveryCost: deliveryCost,
+      finalCartTotal: finalCartTotal
+    });
+    setActiveTab('order-success');
   };
+
 
   // Smart Finder Run
   const handleFinderRun = () => {
@@ -717,18 +761,18 @@ function App() {
     setIsAdminModalOpen(true);
   };
 
-  const handleDeleteProduct = async (id: number | undefined) => {
-    if (!id) return;
-    if (!confirm("هل تود إزالة المنتج من المعروضات؟")) return;
+  const handleDeleteProduct = async () => {
+    if (!productToDelete || !productToDelete.id) return;
 
     try {
       const token = sessionStorage.getItem('adminToken') || '';
-      const response = await fetch(`/api/products/${id}`, { 
+      const response = await fetch(`/api/products/${productToDelete.id}`, { 
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (response.ok) {
-        alert("تم الحذف بنجاح.");
+        setProductToDelete(null);
+        setIsDeleteModalOpen(false);
         fetchProducts();
         fetchAdminData();
       }
@@ -736,6 +780,27 @@ function App() {
       alert("فشل حذف المنتج.");
     }
   };
+
+  const handleDeleteCategory = async () => {
+    if (!categoryToDelete || !categoryToDelete.id) return;
+    try {
+      const token = sessionStorage.getItem('adminToken') || '';
+      const response = await fetch(`/api/categories/${categoryToDelete.id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        setCategoryToDelete(null);
+        setIsCategoryDeleteModalOpen(false);
+        fetchCategories();
+      } else {
+        alert("فشل حذف التصنيف.");
+      }
+    } catch (e) {
+      alert("حدث خطأ أثناء الاتصال بالخادم.");
+    }
+  };
+
 
   const renderProductCard = (product: Product) => {
     const isCompared = compareList.some((p: Product) => p.id === product.id);
@@ -844,133 +909,178 @@ function App() {
       <div className="float-dot-2"></div>
 
       {/* Modern Premium Header/Navbar */}
-      <nav className={`card-glass flat sticky top-4 z-40 mx-4 md:mx-12 my-4 px-6 py-4 flex items-center border-white min-h-[74px] transition-all duration-350 ${
+      <nav className={`card-glass flat sticky top-4 z-40 mx-4 md:mx-12 my-4 px-6 py-4 flex flex-col border-white transition-all duration-300 ${
         isScrolled 
           ? 'bg-white/45 backdrop-blur-[28px] shadow-lg shadow-indigo-100/10 border-indigo-100/30' 
           : 'bg-white/65'
       }`}>
-        <AnimatePresence mode="wait">
-          {isSearchOpen ? (
-            <motion.div 
-              key="search-mode"
-              initial={{ opacity: 0, y: -5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.15 }}
-              className="w-full flex items-center gap-4 text-right"
-              dir="rtl"
-            >
-              <div className="relative flex-1">
-                <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                <input 
-                  type="text" 
-                  placeholder="ابحث عن الأجهزة، الملحقات، أو المواصفات..."
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  autoFocus
-                  className="w-full pr-12 pl-5 py-3 rounded-2xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-sm text-right"
-                />
-              </div>
-              <button 
-                onClick={() => { setIsSearchOpen(false); setSearchQuery(''); }}
-                className="px-5 py-3 text-xs font-black text-gray-500 hover:text-indigo-650 transition-all cursor-pointer rounded-2xl bg-gray-50 border border-gray-200/60 hover:bg-gray-100"
+        {/* Top Navbar Row */}
+        <div className="w-full flex items-center justify-between">
+          <AnimatePresence mode="wait">
+            {isSearchOpen ? (
+              <motion.div 
+                key="search-mode"
+                initial={{ opacity: 0, y: -5 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -5 }}
+                transition={{ duration: 0.15 }}
+                className="w-full flex items-center gap-4 text-right"
+                dir="rtl"
               >
-                إلغاء
-              </button>
-            </motion.div>
-          ) : (
-            <motion.div 
-              key="normal-mode"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="w-full flex items-center justify-between"
-            >
-              <div className="logo-wrapper" onClick={() => setActiveTab('home')}>
-                <div className="logo-icon-box">
-                  <div className="logo-shape1"></div>
-                  <div className="logo-shape2"></div>
-                  <div className="logo-shape3"></div>
+                <div className="relative flex-1">
+                  <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="ابحث عن الأجهزة، الملحقات، أو المواصفات..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    autoFocus
+                    className="w-full pr-12 pl-5 py-3 rounded-2xl border border-gray-200 bg-gray-50 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold text-sm text-right"
+                  />
                 </div>
-                <div>
-                  <span className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-800">
-                    الأسطورة
-                  </span>
-                  <span className="text-xs block font-bold text-gray-500">للحاسبات والملحقات</span>
-                </div>
-              </div>
-
-              {/* Navigation Tabs */}
-              <div className="hidden lg:flex items-center gap-8">
-                <button onClick={() => { setActiveTab('home'); setSelectedSubcategory('all'); }} className={`nav-link-premium ${activeTab === 'home' ? 'active' : ''}`}>الرئيسية</button>
-                <button onClick={() => { setActiveTab('laptops'); setSelectedSubcategory('all'); }} className={`nav-link-premium ${activeTab === 'laptops' ? 'active' : ''}`}>أجهزة اللابتوب</button>
-                <button onClick={() => { setActiveTab('accessories'); setSelectedSubcategory('all'); }} className={`nav-link-premium ${activeTab === 'accessories' ? 'active' : ''}`}>الإكسسوارات</button>
-                <button onClick={() => { setActiveTab('smart-finder'); setFinderStep(1); }} className={`nav-link-premium ${activeTab === 'smart-finder' ? 'active' : ''} flex items-center gap-1.5`}>
-                  <Compass size={16} className="text-indigo-650 animate-spin-slow" />
-                  <span className="font-bold text-indigo-650">المساعد الذكي</span>
-                </button>
-                <button onClick={() => setActiveTab('contact')} className={`nav-link-premium ${activeTab === 'contact' ? 'active' : ''}`}>اتصل بنا</button>
-              </div>
-
-              {/* Status indicator, Search & Cart trigger */}
-              <div className="flex items-center gap-2.5">
-
-
-                {/* Search trigger button */}
                 <button 
-                  onClick={() => { setIsSearchOpen(true); setIsMobileMenuOpen(false); }}
-                  className="p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center justify-center cursor-pointer"
-                  title="بحث"
+                  onClick={() => { setIsSearchOpen(false); setSearchQuery(''); }}
+                  className="px-5 py-3 text-xs font-black text-gray-500 hover:text-indigo-650 transition-all cursor-pointer rounded-2xl bg-gray-50 border border-gray-200/60 hover:bg-gray-100"
                 >
-                  <Search size={18} />
+                  إلغاء
                 </button>
+              </motion.div>
+            ) : (
+              <motion.div 
+                key="normal-mode"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="w-full flex items-center justify-between"
+              >
+                <div className="logo-wrapper" onClick={() => setActiveTab('home')}>
+                  <div className="logo-icon-box">
+                    <div className="logo-shape1"></div>
+                    <div className="logo-shape2"></div>
+                    <div className="logo-shape3"></div>
+                  </div>
+                  <div>
+                    <span className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 via-purple-600 to-indigo-800">
+                      الأسطورة
+                    </span>
+                    <span className="text-xs block font-bold text-gray-500">للحاسبات والملحقات</span>
+                  </div>
+                </div>
 
-                <motion.button 
-                  onClick={() => { setActiveTab('cart'); setIsMobileMenuOpen(false); }} 
-                  animate={animateCart ? { scale: [1, 1.3, 0.9, 1.15, 1], rotate: [0, -12, 12, -6, 0] } : { scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", stiffness: 300, damping: 15 }}
-                  className="relative p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center gap-2 cursor-pointer"
-                >
-                  <ShoppingCart size={18} />
-                  <span className="hidden lg:inline font-bold text-xs">السلة</span>
-                  {cart.length > 0 && (
-                    <motion.span 
-                      initial={{ scale: 0.5, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      key={cart.reduce((sum, item) => sum + item.quantity, 0)}
-                      className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-extrabold shadow"
-                    >
-                      {cart.reduce((sum, item) => sum + item.quantity, 0)}
-                    </motion.span>
-                  )}
-                </motion.button>
+                {/* Navigation Tabs */}
+                <div className="hidden lg:flex items-center gap-8">
+                  <button onClick={() => { setActiveTab('home'); setSelectedSubcategory('all'); }} className={`nav-link-premium ${activeTab === 'home' ? 'active' : ''}`}>الرئيسية</button>
+                  <button onClick={() => { setActiveTab('laptops'); setSelectedSubcategory('all'); }} className={`nav-link-premium ${activeTab === 'laptops' ? 'active' : ''}`}>أجهزة اللابتوب</button>
+                  <button onClick={() => { setActiveTab('accessories'); setSelectedSubcategory('all'); }} className={`nav-link-premium ${activeTab === 'accessories' ? 'active' : ''}`}>الإكسسوارات</button>
+                  <button onClick={() => { setActiveTab('smart-finder'); setFinderStep(1); }} className={`nav-link-premium ${activeTab === 'smart-finder' ? 'active' : ''} flex items-center gap-1.5`}>
+                    <Compass size={16} className="text-indigo-650 animate-spin-slow" />
+                    <span className="font-bold text-indigo-650">المساعد الذكي</span>
+                  </button>
+                  <button onClick={() => setActiveTab('contact')} className={`nav-link-premium ${activeTab === 'contact' ? 'active' : ''}`}>اتصل بنا</button>
+                </div>
 
-                {/* Mobile Menu Toggle Button */}
-                <button
-                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  className="lg:hidden flex flex-col justify-center items-center w-10 h-10 rounded-xl bg-white border border-gray-200 shadow-sm relative cursor-pointer"
-                >
-                  <motion.span
-                    animate={isMobileMenuOpen ? { rotate: 45, y: 5.5 } : { rotate: 0, y: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="w-5 h-0.5 bg-gray-600 rounded-full mb-1 block"
-                  />
-                  <motion.span
-                    animate={isMobileMenuOpen ? { opacity: 0 } : { opacity: 1 }}
-                    transition={{ duration: 0.2 }}
-                    className="w-5 h-0.5 bg-gray-600 rounded-full mb-1 block"
-                  />
-                  <motion.span
-                    animate={isMobileMenuOpen ? { rotate: -45, y: -5.5 } : { rotate: 0, y: 0 }}
-                    transition={{ duration: 0.2 }}
-                    className="w-5 h-0.5 bg-gray-600 rounded-full block"
-                  />
-                </button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+                {/* Status indicator, Search & Cart trigger */}
+                <div className="flex items-center gap-2.5">
+
+
+                  {/* Search trigger button */}
+                  <button 
+                    onClick={() => { setIsSearchOpen(true); setIsMobileMenuOpen(false); }}
+                    className="p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center justify-center cursor-pointer"
+                    title="بحث"
+                  >
+                    <Search size={18} />
+                  </button>
+
+                  <motion.button 
+                    onClick={() => { setActiveTab('cart'); setIsMobileMenuOpen(false); }} 
+                    animate={animateCart ? { scale: [1, 1.3, 0.9, 1.15, 1], rotate: [0, -12, 12, -6, 0] } : { scale: 1, rotate: 0 }}
+                    transition={{ type: "spring", stiffness: 300, damping: 15 }}
+                    className="relative p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center gap-2 cursor-pointer"
+                  >
+                    <ShoppingCart size={18} />
+                    <span className="hidden lg:inline font-bold text-xs">السلة</span>
+                    {cart.length > 0 && (
+                      <motion.span 
+                        initial={{ scale: 0.5, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        key={cart.reduce((sum, item) => sum + item.quantity, 0)}
+                        className="absolute -top-1.5 -right-1.5 bg-indigo-600 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-extrabold shadow"
+                      >
+                        {cart.reduce((sum, item) => sum + item.quantity, 0)}
+                      </motion.span>
+                    )}
+                  </motion.button>
+
+                  {/* Mobile Menu Toggle Button */}
+                  <button
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                    className="lg:hidden flex flex-col justify-center items-center w-10 h-10 rounded-xl bg-white border border-gray-200 shadow-sm relative cursor-pointer"
+                  >
+                    <motion.span
+                      animate={isMobileMenuOpen ? { rotate: 45, y: 5.5 } : { rotate: 0, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-5 h-0.5 bg-gray-600 rounded-full mb-1 block"
+                    />
+                    <motion.span
+                      animate={isMobileMenuOpen ? { opacity: 0 } : { opacity: 1 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-5 h-0.5 bg-gray-600 rounded-full mb-1 block"
+                    />
+                    <motion.span
+                      animate={isMobileMenuOpen ? { rotate: -45, y: -5.5 } : { rotate: 0, y: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="w-5 h-0.5 bg-gray-600 rounded-full block"
+                    />
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Integrated Mobile Menu Dropdown (Part of the Nav element) */}
+        <div 
+          className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out origin-top ${
+            isMobileMenuOpen ? 'max-h-[350px] opacity-100 mt-4 pt-4 border-t border-gray-100' : 'max-h-0 opacity-0 pointer-events-none'
+          }`}
+          style={{ transformStyle: 'preserve-3d', backfaceVisibility: 'hidden' }}
+        >
+          <div className="flex flex-col gap-3 text-center items-center w-full">
+            <button 
+              onClick={() => { setActiveTab('home'); setSelectedSubcategory('all'); setIsMobileMenuOpen(false); }} 
+              className={`py-2 text-sm font-extrabold text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'home' ? 'text-indigo-650 font-black' : ''}`}
+            >
+              الرئيسية
+            </button>
+            <button 
+              onClick={() => { setActiveTab('laptops'); setSelectedSubcategory('all'); setIsMobileMenuOpen(false); }} 
+              className={`py-2 text-sm font-extrabold text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'laptops' ? 'text-indigo-650 font-black' : ''}`}
+            >
+              أجهزة اللابتوب
+            </button>
+            <button 
+              onClick={() => { setActiveTab('accessories'); setSelectedSubcategory('all'); setIsMobileMenuOpen(false); }} 
+              className={`py-2 text-sm font-extrabold text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'accessories' ? 'text-indigo-650 font-black' : ''}`}
+            >
+              الإكسسوارات
+            </button>
+            <button 
+              onClick={() => { setActiveTab('smart-finder'); setFinderStep(1); setIsMobileMenuOpen(false); }} 
+              className={`py-2 text-sm font-extrabold text-indigo-650 flex items-center gap-1.5 justify-center transition-colors block cursor-pointer w-full ${activeTab === 'smart-finder' ? 'font-black' : ''}`}
+            >
+              <Compass size={16} className="animate-spin-slow" />
+              <span>المساعد الذكي</span>
+            </button>
+            <button 
+              onClick={() => { setActiveTab('contact'); setIsMobileMenuOpen(false); }} 
+              className={`py-2 text-sm font-extrabold text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'contact' ? 'text-indigo-650 font-black' : ''}`}
+            >
+              اتصل بنا
+            </button>
+          </div>
+        </div>
       </nav>
 
       {/* Floating Instant Search Dropdown Results directly below sticky navbar */}
@@ -1036,52 +1146,7 @@ function App() {
         )}
       </AnimatePresence>
 
-      {/* Mobile Menu Dropdown Overlay */}
-      <AnimatePresence>
-        {isMobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="lg:hidden mx-4 my-2 overflow-hidden card-glass bg-white/95 border-white shadow-xl z-30 px-6 py-5 flex flex-col gap-4 text-center items-center"
-          >
-            <button 
-              onClick={() => { setActiveTab('home'); setSelectedSubcategory('all'); setIsMobileMenuOpen(false); }} 
-              className={`py-2.5 text-sm font-extrabold border-b border-gray-100 text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'home' ? 'text-indigo-650' : ''}`}
-            >
-              الرئيسية
-            </button>
-            <button 
-              onClick={() => { setActiveTab('laptops'); setSelectedSubcategory('all'); setIsMobileMenuOpen(false); }} 
-              className={`py-2.5 text-sm font-extrabold border-b border-gray-100 text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'laptops' ? 'text-indigo-650' : ''}`}
-            >
-              أجهزة اللابتوب
-            </button>
-            <button 
-              onClick={() => { setActiveTab('accessories'); setSelectedSubcategory('all'); setIsMobileMenuOpen(false); }} 
-              className={`py-2.5 text-sm font-extrabold border-b border-gray-100 text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'accessories' ? 'text-indigo-650' : ''}`}
-            >
-              الإكسسوارات
-            </button>
-            <button 
-              onClick={() => { setActiveTab('smart-finder'); setFinderStep(1); setIsMobileMenuOpen(false); }} 
-              className={`py-2.5 text-sm font-extrabold border-b border-gray-100 text-indigo-650 flex items-center gap-1.5 justify-center transition-colors block cursor-pointer w-full ${activeTab === 'smart-finder' ? 'font-black' : ''}`}
-            >
-              <Compass size={16} className="animate-spin-slow" />
-              <span>المساعد الذكي</span>
-            </button>
-            <button 
-              onClick={() => { setActiveTab('contact'); setIsMobileMenuOpen(false); }} 
-              className={`py-2.5 text-sm font-extrabold border-b border-gray-100 text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'contact' ? 'text-indigo-650' : ''}`}
-            >
-              اتصل بنا
-            </button>
 
-
-          </motion.div>
-        )}
-      </AnimatePresence>
 
 
 
@@ -1902,12 +1967,27 @@ function App() {
       {/* Dedicated Cart & Checkout Page */}
       {activeTab === 'cart' && (
         <main className="container mx-auto px-6 py-12 flex-1 max-w-7xl">
-          <div className="text-right mb-8">
-            <h2 className="text-3xl font-black text-gray-900 flex items-center gap-3 justify-end">
-              <span>سلة التسوق وإتمام الطلب</span>
-              <ShoppingBag size={30} className="text-indigo-650" />
-            </h2>
-            <p className="text-xs text-gray-400 mt-1">راجع الأجهزة والملحقات المختارة، حدد تفاصيل العنوان وأجور التوصيل لإكمال طلبك.</p>
+          <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center gap-4 mb-8 text-right" dir="rtl">
+            <div>
+              <h2 className="text-3xl font-black text-gray-900 flex items-center gap-3">
+                <ShoppingBag size={30} className="text-indigo-650" />
+                <span>سلة التسوق وإتمام الطلب</span>
+              </h2>
+              <p className="text-xs text-gray-400 mt-1">راجع الأجهزة والملحقات المختارة، حدد تفاصيل العنوان وأجور التوصيل لإكمال طلبك.</p>
+            </div>
+            
+            {/* زر فواتيري السابقة */}
+            <button 
+              onClick={() => {
+                const stored = JSON.parse(localStorage.getItem('my_orders') || '[]');
+                setMyOrders(stored.slice(-5).reverse());
+                setActiveTab('my-orders');
+              }}
+              className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100/70 border border-indigo-150 text-indigo-700 font-extrabold text-xs rounded-xl flex items-center gap-2 cursor-pointer transition-all shadow-sm"
+            >
+              <Receipt size={14} className="text-indigo-650" />
+              <span>سجل الطلبات والمشتريات السابقة</span>
+            </button>
           </div>
 
           {cart.length === 0 ? (
@@ -1953,7 +2033,16 @@ function App() {
                             <div>
                               <h4 className="font-extrabold text-sm text-gray-900 line-clamp-2">{item.product.title}</h4>
                               <span className="text-[10px] text-gray-400 font-bold block mt-1">المجموعة: {item.product.subcategory}</span>
-                              <span className="text-xs text-indigo-650 font-black block mt-1">{formatProductPrice(item.product.price)}</span>
+                              <div className="mt-1">
+                                {item.product.discount_price && Number(item.product.discount_price) > 0 ? (
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-red-500 font-black">{formatProductPrice(item.product.discount_price)}</span>
+                                    <span className="text-[10px] text-gray-400 line-through font-bold">{formatProductPrice(item.product.price)}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-indigo-650 font-black">{formatProductPrice(item.product.price)}</span>
+                                )}
+                              </div>
                             </div>
                           </div>
 
@@ -1970,7 +2059,12 @@ function App() {
                             </div>
 
                             <div className="text-left font-black text-sm text-indigo-650 w-24">
-                              {formatProductPrice(item.product.price * item.quantity)}
+                              {(() => {
+                                const activePrice = item.product.discount_price && Number(item.product.discount_price) > 0
+                                  ? Number(item.product.discount_price)
+                                  : item.product.price;
+                                return formatProductPrice(activePrice * item.quantity);
+                              })()}
                             </div>
 
                             <button onClick={() => removeFromCart(item.product.id)} className="text-gray-400 hover:text-red-500 cursor-pointer transition-colors p-2 bg-white rounded-xl border border-gray-200/60 shadow-sm hover:border-red-200" title="إزالة من السلة">
@@ -2538,7 +2632,7 @@ function App() {
                                   <span>تعديل</span>
                                 </button>
                                 <button 
-                                  onClick={() => handleDeleteProduct(p.id)} 
+                                  onClick={() => { setProductToDelete(p); setIsDeleteModalOpen(true); }} 
                                   className="py-2 px-3 text-red-500 hover:bg-red-50 border border-red-100 rounded-xl cursor-pointer transition-all flex items-center gap-1.5 font-bold text-xs shadow-sm bg-white"
                                   title="إزالة الجهاز نهائياً"
                                 >
@@ -2623,17 +2717,79 @@ function App() {
                               </div>
                             </div>
 
-                            {/* Contact Action */}
-                            <div className="pt-2">
-                              <a 
-                                href={`https://wa.me/${cleanPhone}?text=${whatsAppMsg}`} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold text-xs shadow-md hover:shadow-lg transition-all cursor-pointer"
-                              >
-                                <MessageSquare size={14} />
-                                <span>تواصل لتأكيد الفاتورة بالواتساب</span>
-                              </a>
+                            {/* Contact Action & Status Update */}
+                            <div className="pt-2 space-y-2">
+                              <div className="flex justify-between items-center bg-gray-50 p-2.5 rounded-xl border border-gray-150 text-xs font-bold mb-2">
+                                <span className="text-gray-450">حالة الطلب:</span>
+                                <span className={`px-2 py-0.5 rounded text-[10px] ${
+                                  o.status === 'prepared' ? 'bg-green-50 text-green-700 border border-green-200' :
+                                  o.status === 'delivered' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                                  'bg-amber-50 text-amber-700 border border-amber-200'
+                                }`}>
+                                  {o.status === 'prepared' ? '📦 تم التجهيز' : o.status === 'delivered' ? '✅ تم التوصيل' : '⏳ قيد الانتظار'}
+                                </span>
+                              </div>
+
+                              <div className="flex gap-2">
+                                <a 
+                                  href={`https://wa.me/${cleanPhone}?text=${whatsAppMsg}`} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold text-[11px] shadow-sm hover:shadow-md transition-all cursor-pointer text-center"
+                                >
+                                  <MessageSquare size={13} />
+                                  <span>واتساب</span>
+                                </a>
+
+                                {o.status === 'pending' ? (
+                                  <button
+                                    onClick={async () => {
+                                      const token = sessionStorage.getItem('adminToken') || '';
+                                      try {
+                                        const res = await fetch(`/api/orders/${o.id}/status`, {
+                                          method: 'PUT',
+                                          headers: {
+                                            'Content-Type': 'application/json',
+                                            'Authorization': `Bearer ${token}`
+                                          },
+                                          body: JSON.stringify({ status: 'prepared' })
+                                        });
+                                        if (res.ok) {
+                                          fetchAdminData();
+                                          // فتح واتساب مباشرة لإبلاغ الزبون
+                                          const itemsList = Array.isArray(o.items)
+                                            ? o.items.map((it: {title:string;quantity:number;price:number}) =>
+                                                `• ${it.title} (${it.quantity} قطعة)`
+                                              ).join('\n')
+                                            : '';
+                                          const waText = encodeURIComponent(
+                                            `✅ تم تجهيز طلبك - متجر الأسطورة للحاسبات\n` +
+                                            `━━━━━━━━━━━━━━━━━━━━\n\n` +
+                                            `مرحباً أستاذ ${o.customer_name} 😊\n\n` +
+                                            `يسعدنا إعلامك بأن طلبك رقم #${o.id} قد تم تجهيزه وتغليفه بنجاح! 📦\n\n` +
+                                            `📋 تفاصيل طلبك:\n${itemsList}\n\n` +
+                                            `📍 العنوان: ${o.customer_address}\n` +
+                                            `💰 الإجمالي: ${Number(o.total_price).toLocaleString('en-US')} د.ع\n\n` +
+                                            `━━━━━━━━━━━━━━━━━━━━\n` +
+                                            `🚚 سيتم تسليمه قريباً عبر شركة التوصيل\n` +
+                                            `شكراً لثقتك بنا! 🙏`
+                                          );
+                                          window.open(`https://wa.me/${cleanPhone}?text=${waText}`, '_blank');
+                                        }
+                                      } catch (err) {
+                                        alert('خطأ أثناء التحديث');
+                                      }
+                                    }}
+                                    className="flex-1 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-[11px] shadow-sm transition-all cursor-pointer text-center"
+                                  >
+                                    📦 تجهيز الطلب
+                                  </button>
+                                ) : o.status === 'prepared' ? (
+                                  <div className="flex-1 py-2.5 rounded-xl bg-green-100 text-green-700 font-extrabold text-[11px] text-center border border-green-300">
+                                    ✅ مُجهَّز
+                                  </div>
+                                ) : null}
+                              </div>
                             </div>
                           </div>
                         );
@@ -2688,9 +2844,23 @@ function App() {
                         <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
                           <Laptop size={22} />
                         </div>
-                        <div>
-                          <h3 className="font-black text-gray-900 text-base">💻 أجهزة اللابتوب</h3>
-                          <span className="text-[10px] text-gray-400 font-bold block">إجمالي المعروض: {products.filter(p => p.category === 'laptop').length} جهاز</span>
+                        <div className="flex-1 text-right">
+                          <div className="flex items-center gap-1.5 justify-start">
+                            <h3 className="font-black text-gray-900 text-base">{mainCatLaptopName}</h3>
+                            <button
+                              onClick={() => {
+                                const newName = prompt("أدخل المسمى الجديد لقسم اللابتوبات:", mainCatLaptopName);
+                                if (newName && newName.trim()) {
+                                  saveMainCategoryName('main_cat_laptop_name', newName);
+                                }
+                              }}
+                              className="p-1 text-indigo-600 hover:bg-indigo-50 rounded-lg cursor-pointer transition-all"
+                              title="تعديل مسمى القسم الرئيسي"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-gray-400 font-bold block mt-0.5">إجمالي المعروض: {products.filter(p => p.category === 'laptop').length} جهاز</span>
                         </div>
                       </div>
 
@@ -2709,10 +2879,10 @@ function App() {
                                       setAdminCategoryFilter(sub.id);
                                       setAdminSubTab('products');
                                     }}
-                                    className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                                    className="text-[10px] font-bold text-indigo-650 hover:underline cursor-pointer"
                                     title="عرض الأجهزة المعروضة في هذا القسم"
                                   >
-                                    عرض الأجهزة 🔍
+                                    عرض المعروضات
                                   </button>
                                   <div className="flex gap-1 border-r pr-2 border-gray-200">
                                     <button
@@ -2726,24 +2896,13 @@ function App() {
                                       <Edit3 size={11} />
                                     </button>
                                     <button
-                                      onClick={async () => {
+                                      onClick={() => {
                                         if (count > 0) {
-                                          alert(`لا يمكن حذف هذا التصنيف لأنه يحتوي على ${count} أجهزة معروضة حالياً! يرجى نقل أو حذف الأجهزة أولاً.`);
+                                          alert(`لا يمكن حذف هذا القسم لأنه يحتوي على ${count} أجهزة معروضة حالياً! يرجى نقل أو حذف الأجهزة أولاً.`);
                                           return;
                                         }
-                                        if (confirm(`هل أنت متأكد من حذف تصنيف (${sub.name}) نهائياً؟`)) {
-                                          try {
-                                            const res = await fetch(`/api/categories/${sub.id}`, { method: 'DELETE' });
-                                            if (res.ok) {
-                                              alert("تم حذف التصنيف بنجاح.");
-                                              fetchCategories();
-                                            } else {
-                                              alert("فشل حذف التصنيف.");
-                                            }
-                                          } catch (err) {
-                                            alert("حدث خطأ أثناء الاتصال بالخادم.");
-                                          }
-                                        }
+                                        setCategoryToDelete({ id: sub.id, name: sub.name });
+                                        setIsCategoryDeleteModalOpen(true);
                                       }}
                                       className="p-1 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-all"
                                       title="حذف التصنيف"
@@ -2764,9 +2923,23 @@ function App() {
                         <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
                           <Package size={22} />
                         </div>
-                        <div>
-                          <h3 className="font-black text-gray-900 text-base">🔌 الإكسسوارات والملحقات</h3>
-                          <span className="text-[10px] text-gray-400 font-bold block">إجمالي المعروض: {products.filter(p => p.category === 'accessory').length} ملحق</span>
+                        <div className="flex-1 text-right">
+                          <div className="flex items-center gap-1.5 justify-start">
+                            <h3 className="font-black text-gray-900 text-base">{mainCatAccessoryName}</h3>
+                            <button
+                              onClick={() => {
+                                const newName = prompt("أدخل المسمى الجديد لقسم الملحقات:", mainCatAccessoryName);
+                                if (newName && newName.trim()) {
+                                  saveMainCategoryName('main_cat_accessory_name', newName);
+                                }
+                              }}
+                              className="p-1 text-indigo-600 hover:bg-indigo-50 rounded-lg cursor-pointer transition-all"
+                              title="تعديل مسمى القسم الرئيسي"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-gray-400 font-bold block mt-0.5">إجمالي المعروض: {products.filter(p => p.category === 'accessory').length} ملحق</span>
                         </div>
                       </div>
 
@@ -2785,10 +2958,10 @@ function App() {
                                       setAdminCategoryFilter(sub.id);
                                       setAdminSubTab('products');
                                     }}
-                                    className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                                    className="text-[10px] font-bold text-indigo-650 hover:underline cursor-pointer"
                                     title="عرض الملحقات المعروضة في هذا القسم"
                                   >
-                                    عرض الأجهزة 🔍
+                                    عرض المعروضات
                                   </button>
                                   <div className="flex gap-1 border-r pr-2 border-gray-200">
                                     <button
@@ -2802,24 +2975,13 @@ function App() {
                                       <Edit3 size={11} />
                                     </button>
                                     <button
-                                      onClick={async () => {
+                                      onClick={() => {
                                         if (count > 0) {
                                           alert(`لا يمكن حذف هذا التصنيف لأنه يحتوي على ${count} ملحقات معروضة حالياً! يرجى نقل أو حذف الأجهزة أولاً.`);
                                           return;
                                         }
-                                        if (confirm(`هل أنت متأكد من حذف تصنيف (${sub.name}) نهائياً؟`)) {
-                                          try {
-                                            const res = await fetch(`/api/categories/${sub.id}`, { method: 'DELETE' });
-                                            if (res.ok) {
-                                              alert("تم حذف التصنيف بنجاح.");
-                                              fetchCategories();
-                                            } else {
-                                              alert("فشل حذف التصنيف.");
-                                            }
-                                          } catch (err) {
-                                            alert("حدث خطأ أثناء الاتصال بالخادم.");
-                                          }
-                                        }
+                                        setCategoryToDelete({ id: sub.id, name: sub.name });
+                                        setIsCategoryDeleteModalOpen(true);
                                       }}
                                       className="p-1 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-all"
                                       title="حذف التصنيف"
@@ -2840,9 +3002,23 @@ function App() {
                         <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
                           <Compass size={22} />
                         </div>
-                        <div>
-                          <h3 className="font-black text-gray-900 text-base">🏠 عروض الصفحة الرئيسية</h3>
-                          <span className="text-[10px] text-gray-400 font-bold block">إجمالي الأقسام: {(categories as any[]).filter(c => c.type === 'home').length} قسم</span>
+                        <div className="flex-1 text-right">
+                          <div className="flex items-center gap-1.5 justify-start">
+                            <h3 className="font-black text-gray-900 text-base">{mainCatHomeName}</h3>
+                            <button
+                              onClick={() => {
+                                const newName = prompt("أدخل المسمى الجديد لقسم الرئيسية:", mainCatHomeName);
+                                if (newName && newName.trim()) {
+                                  saveMainCategoryName('main_cat_home_name', newName);
+                                }
+                              }}
+                              className="p-1 text-indigo-600 hover:bg-indigo-50 rounded-lg cursor-pointer transition-all"
+                              title="تعديل مسمى القسم الرئيسي"
+                            >
+                              <Edit3 size={12} />
+                            </button>
+                          </div>
+                          <span className="text-[10px] text-gray-400 font-bold block mt-0.5">إجمالي الأقسام: {(categories as any[]).filter(c => c.type === 'home').length} قسم</span>
                         </div>
                       </div>
 
@@ -2864,10 +3040,10 @@ function App() {
                                         setAdminCategoryFilter(sub.id);
                                         setAdminSubTab('products');
                                       }}
-                                      className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                                      className="text-[10px] font-bold text-indigo-650 hover:underline cursor-pointer"
                                       title="عرض المنتجات التابعة لهذا القسم"
                                     >
-                                      عرض 🔍
+                                      عرض المعروضات
                                     </button>
                                     <div className="flex gap-1 border-r pr-2 border-gray-200">
                                       <button
@@ -2881,24 +3057,13 @@ function App() {
                                         <Edit3 size={11} />
                                       </button>
                                       <button
-                                        onClick={async () => {
+                                        onClick={() => {
                                           if (count > 0) {
                                             alert(`لا يمكن حذف هذا القسم لأنه يحتوي على ${count} منتجات معروضة حالياً!`);
                                             return;
                                           }
-                                          if (confirm(`هل أنت متأكد من حذف قسم (${sub.name}) نهائياً؟`)) {
-                                            try {
-                                              const res = await fetch(`/api/categories/${sub.id}`, { method: 'DELETE' });
-                                              if (res.ok) {
-                                                alert("تم حذف التصنيف بنجاح.");
-                                                fetchCategories();
-                                              } else {
-                                                alert("فشل حذف التصنيف.");
-                                              }
-                                            } catch (err) {
-                                              alert("حدث خطأ أثناء الاتصال بالخادم.");
-                                            }
-                                          }
+                                          setCategoryToDelete({ id: sub.id, name: sub.name });
+                                          setIsCategoryDeleteModalOpen(true);
                                         }}
                                         className="p-1 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-all"
                                         title="حذف القسم"
@@ -2913,109 +3078,6 @@ function App() {
                         )}
                       </div>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Add/Edit Category Modal Overlay */}
-              {isCategoryModalOpen && editingCategory && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-                  {/* Backdrop overlay */}
-                  <div 
-                    className="modal-overlay fixed inset-0 bg-slate-900/45 backdrop-blur-md cursor-pointer"
-                    onClick={() => setIsCategoryModalOpen(false)}
-                  />
-                  
-                  {/* Modal Dialog Box */}
-                  <div className="modal-box bg-white rounded-3xl max-w-md w-full p-6 border shadow-2xl relative space-y-5 text-right z-10" dir="rtl">
-                    <div className="flex justify-between items-center border-b pb-4">
-                      <h3 className="text-base font-black text-gray-800 flex items-center gap-2">
-                        <Edit3 size={18} className="text-indigo-600" />
-                        <span>{editingCategory.isNew ? 'إضافة تصنيف فرعي جديد' : 'تعديل التصنيف الفرعي'}</span>
-                      </h3>
-                      <button 
-                        type="button"
-                        onClick={() => setIsCategoryModalOpen(false)}
-                        className="w-8 h-8 rounded-full bg-gray-50 hover:bg-gray-100 text-gray-500 flex items-center justify-center cursor-pointer transition-all border border-gray-150"
-                      >
-                        ✕
-                      </button>
-                    </div>
-
-                    <form onSubmit={async (e) => {
-                      e.preventDefault();
-                      if (editingCategory.isNew) {
-                        // Check if ID already exists
-                        if (categories.some(c => c.id === editingCategory.id)) {
-                          alert("معرف التصنيف هذا موجود بالفعل! يرجى استخدام معرف فريد.");
-                          return;
-                        }
-                      }
-                      
-                      try {
-                        const response = await fetch('/api/categories', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            id: editingCategory.id,
-                            name: editingCategory.name,
-                            type: editingCategory.type
-                          })
-                        });
-                        if (response.ok) {
-                          alert("تم حفظ التصنيف بنجاح!");
-                          fetchCategories();
-                          setIsCategoryModalOpen(false);
-                        } else {
-                          alert("فشل في حفظ التصنيف.");
-                        }
-                      } catch (err) {
-                        alert("حدث خطأ أثناء الاتصال بالخادم.");
-                      }
-                    }} className="space-y-4 text-right">
-                      {editingCategory.isNew && (
-                        <div className="flex flex-col gap-1.5">
-                          <label className="text-xs font-black text-gray-700">المُعرّف بالإنجليزية (ID - فريد ولا يمكن تعديله لاحقاً) *</label>
-                          <input
-                            type="text"
-                            placeholder="مثال: gpu أو speaker"
-                            required
-                            value={editingCategory.id}
-                            onChange={e => setEditingCategory(prev => prev ? { ...prev, id: e.target.value.toLowerCase().replace(/\s+/g, '') } : null)}
-                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
-                          />
-                        </div>
-                      )}
-
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-black text-gray-700">اسم التصنيف (بالعربية مع الإيموجي) *</label>
-                        <input
-                          type="text"
-                          placeholder="مثال: 🎮 كروت شاشة - GPU"
-                          required
-                          value={editingCategory.name}
-                          onChange={e => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
-                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
-                        />
-                      </div>
-
-                      <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-black text-gray-700">التصنيف الرئيسي التابع له</label>
-                        <select
-                          value={editingCategory.type}
-                          onChange={e => setEditingCategory(prev => prev ? { ...prev, type: e.target.value as any } : null)}
-                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
-                        >
-                          <option value="laptop">💻 لابتوب</option>
-                          <option value="accessory">🔌 إكسسوار</option>
-                          <option value="home">🏠 الرئيسية (عرض خاص)</option>
-                        </select>
-                      </div>
-
-                      <button type="submit" className="w-full btn-premium-primary justify-center py-3 text-xs flex items-center gap-2 cursor-pointer mt-4">
-                        <span>حفظ التصنيف</span>
-                      </button>
-                    </form>
                   </div>
                 </div>
               )}
@@ -3148,22 +3210,55 @@ function App() {
                         className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
                       />
                     </div>
+
+                    <div className="border-t border-gray-100/50 pt-4">
+                      <h4 className="font-extrabold text-xs text-gray-700 mb-3 flex items-center gap-1.5">🤖 إشعارات بوت تليغرام (Telegram Bot Notifications)</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-black text-gray-700">رمز البوت (Telegram Bot Token)</label>
+                          <input
+                            type="password"
+                            placeholder={telegramBotToken ? "••••••••••••••••••••••••" : "أدخل رمز توكن البوت"}
+                            value={editTelegramBotToken}
+                            onChange={e => setEditTelegramBotToken(e.target.value)}
+                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
+                            dir="ltr"
+                          />
+                          <p className="text-[10px] text-gray-400">رمز التوكن الذي يمنحه لك BotFather عند إنشاء البوت.</p>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs font-black text-gray-700">معرّف المحادثة (Telegram Chat ID)</label>
+                          <input
+                            type="text"
+                            placeholder={`الحالي: ${telegramChatId}`}
+                            value={editTelegramChatId}
+                            onChange={e => setEditTelegramChatId(e.target.value)}
+                            className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
+                            dir="ltr"
+                          />
+                          <p className="text-[10px] text-gray-400">معرّف حساب التليغرام لتلقي إشعارات الطلبات المباشرة.</p>
+                        </div>
+                      </div>
+                    </div>
+
                     <button
                       type="button"
                       onClick={async () => {
-                        if (!editWhatsApp && !editPhone && !editAddress) {
+                        if (!editWhatsApp && !editPhone && !editAddress && !editTelegramBotToken && !editTelegramChatId) {
                           alert('أدخل على الأقل قيمة واحدة للتحديث.');
                           return;
                         }
-                        await saveContactInfo(editWhatsApp, editPhone, editAddress);
+                        await saveContactInfo(editWhatsApp, editPhone, editAddress, editTelegramBotToken, editTelegramChatId);
                         setEditWhatsApp('');
                         setEditPhone('');
                         setEditAddress('');
-                        alert('✅ تم حفظ معلومات التواصل بنجاح!');
+                        setEditTelegramBotToken('');
+                        setEditTelegramChatId('');
+                        alert('✅ تم حفظ الإعدادات بنجاح!');
                       }}
                       className="btn-premium-primary text-xs py-3 px-6 cursor-pointer"
                     >
-                      حفظ معلومات التواصل 📞
+                      حفظ إعدادات التواصل والتنبيهات 💾
                     </button>
                   </div>
 
@@ -3308,6 +3403,194 @@ function App() {
         </main>
       )}
 
+      {/* My Orders Full Page Display */}
+      {activeTab === 'my-orders' && (
+        <main className="container mx-auto px-6 py-12 flex-1 max-w-4xl text-right" dir="rtl">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8 border-b pb-6 border-gray-200/40">
+            <div>
+              <h2 className="text-3xl font-black text-gray-900 flex items-center gap-2.5">
+                <Receipt size={32} className="text-indigo-650" />
+                <span>سجل المشتريات والطلبات السابقة</span>
+              </h2>
+              <p className="text-xs text-gray-400 mt-1.5">تُحفظ الفواتير محلياً في متصفحك لمتابعة عمليات الشراء والتجهيز بسهولة.</p>
+            </div>
+            
+            <div className="flex gap-2.5">
+              <button 
+                onClick={() => setActiveTab('cart')}
+                className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-all shadow-md shadow-indigo-100"
+              >
+                الرجوع إلى السلة
+              </button>
+              <button 
+                onClick={() => setActiveTab('home')}
+                className="px-4 py-2.5 bg-white hover:bg-gray-50 border border-gray-250 text-gray-600 font-extrabold text-xs rounded-xl cursor-pointer transition-all"
+              >
+                الرئيسية
+              </button>
+            </div>
+          </div>
+
+          {myOrders.length === 0 ? (
+            <div className="card-glass p-16 text-center text-gray-400 bg-white/70 max-w-xl mx-auto border-white/40 shadow-sm">
+              <Receipt size={56} className="mx-auto mb-4 text-gray-300" />
+              <h3 className="font-extrabold text-base text-gray-700 mb-2">لا توجد طلبات سابقة</h3>
+              <p className="text-xs mb-6">لم تقم بإرسال أي طلبات شراء من هذا المتصفح بعد.</p>
+              <button 
+                onClick={() => setActiveTab('home')}
+                className="btn-premium-primary inline-flex justify-center cursor-pointer mx-auto text-xs"
+              >
+                <span>ابدأ التسوق الآن</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {myOrders.map((order, idx) => (
+                <div key={idx} className="card-glass flat p-6 bg-white/90 border-white shadow-sm space-y-4">
+                  {/* Order Head info */}
+                  <div className="flex justify-between items-center border-b border-gray-150 pb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="font-black text-sm text-gray-900">طلب رقم: {order.id}</span>
+                    </div>
+                    <span className="text-[11px] text-gray-400 font-bold">{order.date}</span>
+                  </div>
+
+                  {/* Customer info */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 bg-gray-50/50 p-4 rounded-2xl border border-gray-150 text-xs font-bold text-gray-600">
+                    <div>
+                      <span className="text-[10px] text-gray-400 block mb-0.5">المستلم:</span>
+                      <span className="text-gray-900">{order.customer_name}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 block mb-0.5">الهاتف:</span>
+                      <span className="text-gray-900" dir="ltr">{order.customer_phone}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 block mb-0.5">عنوان التوصيل:</span>
+                      <span className="text-gray-900">{order.customer_address}</span>
+                    </div>
+                  </div>
+
+                  {/* Items List */}
+                  <div className="space-y-2">
+                    <span className="text-xs font-black text-gray-800 block">تفاصيل الفاتورة والمشتريات:</span>
+                    <div className="border border-gray-150/70 rounded-2xl overflow-hidden">
+                      <table className="w-full text-right text-xs" dir="rtl">
+                        <thead>
+                          <tr className="bg-gray-50/80 text-gray-500 font-black border-b border-gray-150">
+                            <th className="p-3.5">المنتج</th>
+                            <th className="p-3.5 text-center w-24">الكمية</th>
+                            <th className="p-3.5 text-left w-36">السعر الإجمالي</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 font-bold text-gray-700">
+                          {order.items?.map((it: any, itIdx: number) => (
+                            <tr key={itIdx} className="hover:bg-gray-50/30">
+                              <td className="p-3.5">{it.title}</td>
+                              <td className="p-3.5 text-center">{it.quantity}</td>
+                              <td className="p-3.5 text-left text-gray-900 font-black">
+                                {formatIQD(it.price * it.quantity)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Summary Total */}
+                  <div className="flex justify-between items-center pt-3 border-t border-dashed border-gray-200">
+                    <span className="text-xs text-gray-400 font-extrabold">تم إرسال نسخة من الفاتورة إلى البوت وواتساب المتجر للمتابعة.</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs font-bold text-gray-500">القيمة الإجمالية:</span>
+                      <span className="text-indigo-600 font-black text-xl">{formatIQD(order.total_price)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </main>
+      )}
+
+      {/* Order Success Full Page Display */}
+      {activeTab === 'order-success' && lastCompletedOrder && (
+        <main className="container mx-auto px-6 py-12 flex-1 max-w-2xl text-right animate-fadeIn" dir="rtl">
+          <div className="card-glass flat p-8 bg-white/95 border-white shadow-2xl space-y-6 text-center">
+            {/* Success Animation / Icon */}
+            <div className="w-20 h-20 mx-auto bg-green-50 rounded-full flex items-center justify-center border-2 border-green-200 shadow-sm">
+              <CheckCircle size={44} className="text-green-600 animate-pulse" />
+            </div>
+
+            {/* Thank you statement */}
+            <div className="space-y-2">
+              <h2 className="text-2xl font-black text-gray-900">❤️ شكراً لتسوقك من متجر الأسطورة!</h2>
+              <p className="text-sm text-gray-600 font-bold max-w-md mx-auto leading-relaxed">
+                طلبك الآن تحت المراجعة، وسيتم التواصل معك مباشرة على تطبيق واتساب لتأكيد موعد التوصيل وخطوات التسليم.
+              </p>
+            </div>
+
+            {/* Invoice card */}
+            <div className="border border-gray-200/80 rounded-3xl p-6 bg-gray-50/50 text-right space-y-4 shadow-sm">
+              <div className="flex justify-between items-center border-b pb-3">
+                <span className="font-extrabold text-sm text-gray-900">رقم الفاتورة: {lastCompletedOrder.id}</span>
+                <span className="text-xs text-gray-400 font-bold">{new Date().toLocaleDateString('ar-IQ')}</span>
+              </div>
+
+              {/* Items Summary Table */}
+              <div className="space-y-2">
+                <span className="text-xs font-black text-gray-450 block">قائمة الأجهزة والملحقات المطلوبة:</span>
+                <div className="border border-gray-150 rounded-2xl bg-white overflow-hidden text-xs">
+                  <table className="w-full text-right" dir="rtl">
+                    <thead>
+                      <tr className="bg-gray-50 text-gray-500 font-bold border-b border-gray-150">
+                        <th className="p-3">المنتج</th>
+                        <th className="p-3 text-center w-20">الكمية</th>
+                        <th className="p-3 text-left w-32">السعر</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 font-semibold text-gray-700">
+                      {lastCompletedOrder.items?.map((it: any, idx: number) => (
+                        <tr key={idx}>
+                          <td className="p-3">{it.title}</td>
+                          <td className="p-3 text-center">{it.quantity}</td>
+                          <td className="p-3 text-left text-gray-950 font-black">{formatIQD(it.price * it.quantity)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Order total info */}
+              <div className="border-t border-dashed pt-3 space-y-1.5 text-xs font-bold text-gray-600">
+                <div className="flex justify-between">
+                  <span>أجور التوصيل:</span>
+                  <span className="text-gray-900">{lastCompletedOrder.deliveryCost > 0 ? formatIQD(lastCompletedOrder.deliveryCost) : 'توصيل مجاني'}</span>
+                </div>
+                <div className="flex justify-between text-sm font-black text-gray-950 pt-1 border-t">
+                  <span>المبلغ الإجمالي المستحق:</span>
+                  <span className="text-indigo-650 text-lg">{formatIQD(lastCompletedOrder.finalCartTotal)}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Back to Home Button */}
+            <div className="pt-4">
+              <button 
+                onClick={() => {
+                  setLastCompletedOrder(null);
+                  setActiveTab('home');
+                }}
+                className="btn-premium-primary text-xs py-3.5 px-8 cursor-pointer shadow-md inline-flex items-center gap-1.5"
+              >
+                <span>العودة للرئيسية</span>
+              </button>
+            </div>
+          </div>
+        </main>
+      )}
+
       {/* Footer */}
       <footer className="card-glass flat mx-4 md:mx-12 mt-auto mb-4 p-8 border-white bg-white/70">
         <div className="container mx-auto max-w-7xl grid grid-cols-1 md:grid-cols-3 gap-8 text-right">
@@ -3357,6 +3640,78 @@ function App() {
               </button>
             </motion.button>
           </AnimatePresence>
+        </div>
+      )}
+
+
+
+      {/* Custom Delete Confirmation Modal */}
+      {isDeleteModalOpen && productToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" dir="rtl">
+          <div className="card-glass max-w-sm w-full bg-white p-6 relative border-gray-100 shadow-2xl text-center space-y-5">
+            {/* Warning icon */}
+            <div className="w-14 h-14 mx-auto bg-red-50 rounded-full flex items-center justify-center border border-red-100">
+              <Trash2 size={26} className="text-red-500" />
+            </div>
+
+            <div className="space-y-1 text-right">
+              <h3 className="text-base font-black text-gray-900 text-center">تأكيد حذف المنتج</h3>
+              <p className="text-xs text-gray-500 text-center leading-relaxed">
+                هل أنت متأكد من إزالة <span className="font-extrabold text-gray-800">"{productToDelete.title}"</span> من قائمة معروضات المتجر نهائياً؟
+              </p>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-2.5 pt-2">
+              <button 
+                onClick={handleDeleteProduct}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-all shadow-sm shadow-red-100"
+              >
+                تأكيد الحذف
+              </button>
+              <button 
+                onClick={() => { setProductToDelete(null); setIsDeleteModalOpen(false); }}
+                className="flex-1 py-2.5 bg-white hover:bg-gray-50 border border-gray-250 text-gray-600 font-extrabold text-xs rounded-xl cursor-pointer transition-all"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Category Delete Confirmation Modal */}
+      {isCategoryDeleteModalOpen && categoryToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" dir="rtl">
+          <div className="card-glass max-w-sm w-full bg-white p-6 relative border-gray-100 shadow-2xl text-center space-y-5">
+            {/* Warning icon */}
+            <div className="w-14 h-14 mx-auto bg-red-50 rounded-full flex items-center justify-center border border-red-100">
+              <Trash2 size={26} className="text-red-500" />
+            </div>
+
+            <div className="space-y-1 text-right">
+              <h3 className="text-base font-black text-gray-900 text-center">تأكيد حذف القسم</h3>
+              <p className="text-xs text-gray-500 text-center leading-relaxed">
+                هل أنت متأكد من حذف قسم <span className="font-extrabold text-gray-800">"{categoryToDelete.name}"</span> نهائياً؟
+              </p>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex gap-2.5 pt-2">
+              <button 
+                onClick={handleDeleteCategory}
+                className="flex-1 py-2.5 bg-red-500 hover:bg-red-600 text-white font-extrabold text-xs rounded-xl cursor-pointer transition-all shadow-sm shadow-red-100"
+              >
+                تأكيد الحذف
+              </button>
+              <button 
+                onClick={() => { setCategoryToDelete(null); setIsCategoryDeleteModalOpen(false); }}
+                className="flex-1 py-2.5 bg-white hover:bg-gray-50 border border-gray-250 text-gray-600 font-extrabold text-xs rounded-xl cursor-pointer transition-all"
+              >
+                إلغاء
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -3450,15 +3805,115 @@ function App() {
             )}
           </div>
         </div>
+      )}      {isCategoryModalOpen && editingCategory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          {/* Backdrop overlay */}
+          <div 
+            className="absolute inset-0 cursor-pointer"
+            onClick={() => setIsCategoryModalOpen(false)}
+          />
+          
+          {/* Modal Dialog Box */}
+          <div className="modal-box bg-white rounded-3xl max-w-md w-full p-6 border shadow-2xl relative space-y-5 text-right z-10" dir="rtl">
+            <div className="flex justify-between items-center border-b pb-4">
+              <h3 className="text-base font-black text-gray-800 flex items-center gap-2">
+                <Edit3 size={18} className="text-indigo-600" />
+                <span>{editingCategory.isNew ? 'إضافة تصنيف فرعي جديد' : 'تعديل التصنيف الفرعي'}</span>
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setIsCategoryModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-gray-50 hover:bg-gray-100 text-gray-500 flex items-center justify-center cursor-pointer transition-all border border-gray-150"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (editingCategory.isNew) {
+                // Check if ID already exists
+                if (categories.some(c => c.id === editingCategory.id)) {
+                  alert("معرف التصنيف هذا موجود بالفعل! يرجى استخدام معرف فريد.");
+                  return;
+                }
+              }
+              
+              try {
+                const response = await fetch('/api/categories', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    id: editingCategory.id,
+                    name: editingCategory.name,
+                    type: editingCategory.type
+                  })
+                });
+                if (response.ok) {
+                  alert("تم حفظ التصنيف بنجاح!");
+                  fetchCategories();
+                  setIsCategoryModalOpen(false);
+                } else {
+                  alert("فشل في حفظ التصنيف.");
+                }
+              } catch (err) {
+                alert("حدث خطأ أثناء الاتصال بالخادم.");
+              }
+            }} className="space-y-4 text-right">
+              {editingCategory.isNew && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-black text-gray-700">المُعرّف بالإنجليزية (ID - فريد ولا يمكن تعديله لاحقاً) *</label>
+                  <input
+                    type="text"
+                    placeholder="مثال: gpu أو speaker"
+                    required
+                    value={editingCategory.id}
+                    onChange={e => setEditingCategory(prev => prev ? { ...prev, id: e.target.value.toLowerCase().replace(/\s+/g, '') } : null)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
+                  />
+                </div>
+              )}
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700">اسم التصنيف (بالعربية مع الإيموجي) *</label>
+                <input
+                  type="text"
+                  placeholder="مثال: 🎮 كروت شاشة - GPU"
+                  required
+                  value={editingCategory.name}
+                  onChange={e => setEditingCategory(prev => prev ? { ...prev, name: e.target.value } : null)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-xs font-black text-gray-700">التصنيف الرئيسي التابع له</label>
+                <select
+                  value={editingCategory.type}
+                  onChange={e => setEditingCategory(prev => prev ? { ...prev, type: e.target.value as any } : null)}
+                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
+                >
+                  <option value="laptop">💻 لابتوب</option>
+                  <option value="accessory">🔌 إكسسوار</option>
+                  <option value="home">🏠 الرئيسية (عرض خاص)</option>
+                </select>
+              </div>
+
+              <button type="submit" className="w-full btn-premium-primary justify-center py-3 text-xs flex items-center gap-2 cursor-pointer mt-4">
+                <span>حفظ التصنيف</span>
+              </button>
+            </form>
+          </div>
+        </div>
       )}
 
 
       {/* Add/Edit Product Modal Overlay */}
       {isAdminModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           {/* Backdrop overlay */}
           <div 
-            className="modal-overlay fixed inset-0 bg-slate-900/45 backdrop-blur-md cursor-pointer"
+            className="absolute inset-0 cursor-pointer"
             onClick={() => setIsAdminModalOpen(false)}
           />
           
