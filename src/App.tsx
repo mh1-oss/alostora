@@ -1259,63 +1259,67 @@ function App() {
                 {finderResult ? (
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
                     {/* Primary Recommendation Card */}
-                    <div className="lg:col-span-7 card-glass border-indigo-150 bg-indigo-50/10 p-6 md:p-8 relative">
-                      {(() => {
-                        const matchesBudget = finderBudget === 'low' 
-                          ? finderResult.price < 900 
-                          : finderBudget === 'mid' 
-                            ? (finderResult.price >= 900 && finderResult.price <= 1300) 
-                            : finderResult.price > 1300;
-                        return (
-                          <span className={`px-3 py-1 rounded-full text-[10px] font-bold text-white shadow-sm inline-block mb-6 ${matchesBudget ? 'bg-indigo-600' : 'bg-amber-600'}`}>
-                            {matchesBudget ? '⭐ التوصية المثالية لميزانيتك واحتياجاتك' : '💡 البديل الأقرب لميزانيتك واحتياجاتك'}
-                          </span>
-                        );
-                      })()}
+                    <div className="lg:col-span-7 card-glass border-indigo-150 bg-indigo-50/10 p-8 relative flex flex-col gap-6">
+                      <div className="flex justify-between items-center border-b pb-4 border-gray-100">
+                        {(() => {
+                          const matchesBudget = finderBudget === 'low' 
+                            ? finderResult.price < 900 
+                            : finderBudget === 'mid' 
+                              ? (finderResult.price >= 900 && finderResult.price <= 1300) 
+                              : finderResult.price > 1300;
+                          return (
+                            <span className={`px-3.5 py-1.5 rounded-full text-[10px] font-black text-white shadow-sm inline-block ${matchesBudget ? 'bg-indigo-600' : 'bg-amber-600'}`}>
+                              {matchesBudget ? '⭐ التوصية المثالية لميزانيتك واحتياجاتك' : '💡 البديل الأقرب لميزانيتك واحتياجاتك'}
+                            </span>
+                          );
+                        })()}
+                      </div>
 
-                      <div className="flex flex-col md:flex-row gap-6">
+                      <div className="flex flex-col md:flex-row gap-6 items-start">
                         <img 
                           src={finderResult.image_url} 
                           alt={finderResult.title}
-                          className="w-full md:w-48 h-44 object-cover rounded-2xl border bg-white shrink-0"
+                          className="w-full md:w-44 h-40 object-cover rounded-2xl border bg-white shrink-0 shadow-sm"
                         />
-                        <div className="flex-1 space-y-4">
+                        <div className="flex-1 space-y-4 w-full">
                           <div>
-                            <h4 className="text-lg font-black text-gray-900 mb-1">{finderResult.title}</h4>
+                            <h4 className="text-lg font-black text-gray-900 mb-1 leading-snug">{finderResult.title}</h4>
                             <span className="text-2xl font-black text-indigo-650 block">{formatProductPrice(finderResult.price)}</span>
                           </div>
 
                           {/* Dynamic recommendation justification */}
                           {(finderResult as any).justification && (
-                            <div className="bg-indigo-50/50 border border-indigo-100/60 p-3.5 rounded-xl text-xs text-indigo-905 font-bold leading-relaxed">
+                            <div className="bg-indigo-50/50 border border-indigo-100/60 p-4 rounded-xl text-xs text-gray-700 font-medium leading-relaxed">
                               🎯 <strong>سبب التوصية:</strong> {(finderResult as any).justification}
                             </div>
                           )}
-
-                          <div className="bg-white/80 p-4 rounded-xl text-xs space-y-2.5 border border-gray-100/60 shadow-sm">
-                            {Object.entries(finderResult.specs).map(([key, val]) => (
-                              <div key={key} className="flex justify-between">
-                                <span className="text-gray-400 font-bold">{key}:</span>
-                                <span className="text-gray-800 font-extrabold">{val}</span>
-                              </div>
-                            ))}
-                          </div>
-
-                          <div className="flex gap-2.5 pt-2">
-                            <button 
-                              onClick={() => addToCart(finderResult)}
-                              className="flex-1 btn-premium-primary justify-center text-xs py-3"
-                            >
-                              أضف للسلة <ShoppingCart size={14} />
-                            </button>
-                            <button 
-                              onClick={() => { setFinderStep(1); setFinderBudget(null); setFinderUsage(null); }}
-                              className="btn-premium-glass text-xs py-3"
-                            >
-                              إعادة الفحص ↻
-                            </button>
-                          </div>
                         </div>
+                      </div>
+
+                      {/* Technical specifications */}
+                      <div className="bg-white/80 p-5 rounded-2xl text-xs space-y-3 border border-gray-100/60 shadow-inner">
+                        <span className="font-black text-gray-800 block mb-2 text-xs border-b pb-2">⚙️ المواصفات التفصيلية:</span>
+                        {Object.entries(finderResult.specs).map(([key, val]) => (
+                          <div key={key} className="flex justify-between items-center py-1">
+                            <span className="text-gray-400 font-bold">{key}:</span>
+                            <span className="text-gray-800 font-extrabold text-left">{val}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex gap-4 pt-2">
+                        <button 
+                          onClick={() => addToCart(finderResult)}
+                          className="flex-1 btn-premium-primary justify-center text-xs py-3.5"
+                        >
+                          أضف للسلة <ShoppingCart size={14} />
+                        </button>
+                        <button 
+                          onClick={() => { setFinderStep(1); setFinderBudget(null); setFinderUsage(null); }}
+                          className="btn-premium-glass text-xs py-3.5 px-6"
+                        >
+                          إعادة الفحص ↻
+                        </button>
                       </div>
                     </div>
 
