@@ -248,6 +248,10 @@ function App() {
 
   useEffect(() => {
     fetchProducts();
+    // Simple client-side router for admin path
+    if (window.location.pathname === '/admin') {
+      setActiveTab('admin');
+    }
   }, []);
 
   useEffect(() => {
