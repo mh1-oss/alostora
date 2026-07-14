@@ -782,7 +782,7 @@ function App() {
               </div>
 
               {/* Navigation Tabs */}
-              <div className="hidden md:flex items-center gap-8">
+              <div className="hidden lg:flex items-center gap-8">
                 <button onClick={() => { setActiveTab('home'); setSelectedSubcategory('all'); }} className={`nav-link-premium ${activeTab === 'home' ? 'active' : ''}`}>الرئيسية</button>
                 <button onClick={() => { setActiveTab('laptops'); setSelectedSubcategory('all'); }} className={`nav-link-premium ${activeTab === 'laptops' ? 'active' : ''}`}>أجهزة اللابتوب</button>
                 <button onClick={() => { setActiveTab('accessories'); setSelectedSubcategory('all'); }} className={`nav-link-premium ${activeTab === 'accessories' ? 'active' : ''}`}>الإكسسوارات</button>
@@ -798,7 +798,7 @@ function App() {
                 {/* Currency Toggle (Hidden on mobile header, shown on desktop) */}
                 <button 
                   onClick={() => setCurrency(c => c === 'USD' ? 'IQD' : 'USD')}
-                  className="hidden md:flex p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all items-center gap-1.5 cursor-pointer text-xs font-black"
+                  className="hidden lg:flex p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all items-center gap-1.5 cursor-pointer text-xs font-black"
                   title="تبديل العملة"
                 >
                   <span>{currency === 'USD' ? '🇺🇸 USD' : '🇮🇶 IQD'}</span>
@@ -820,7 +820,7 @@ function App() {
                   className="relative p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center gap-2 cursor-pointer"
                 >
                   <ShoppingCart size={18} />
-                  <span className="hidden md:inline font-bold text-xs">السلة</span>
+                  <span className="hidden lg:inline font-bold text-xs">السلة</span>
                   {cart.length > 0 && (
                     <motion.span 
                       initial={{ scale: 0.5, opacity: 0 }}
@@ -836,7 +836,7 @@ function App() {
                 {/* Mobile Menu Toggle Button */}
                 <button
                   onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-                  className="md:hidden flex flex-col justify-center items-center w-10 h-10 rounded-xl bg-white border border-gray-200 shadow-sm relative cursor-pointer"
+                  className="lg:hidden flex flex-col justify-center items-center w-10 h-10 rounded-xl bg-white border border-gray-200 shadow-sm relative cursor-pointer"
                 >
                   <motion.span
                     animate={isMobileMenuOpen ? { rotate: 45, y: 5.5 } : { rotate: 0, y: 0 }}
@@ -931,7 +931,7 @@ function App() {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3, ease: "easeInOut" }}
-            className="md:hidden mx-4 my-2 overflow-hidden card-glass bg-white/95 border-white shadow-xl z-30 px-6 py-5 flex flex-col gap-4 text-center items-center"
+            className="lg:hidden mx-4 my-2 overflow-hidden card-glass bg-white/95 border-white shadow-xl z-30 px-6 py-5 flex flex-col gap-4 text-center items-center"
           >
             <button 
               onClick={() => { setActiveTab('home'); setSelectedSubcategory('all'); setIsMobileMenuOpen(false); }} 
