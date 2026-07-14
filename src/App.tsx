@@ -520,6 +520,21 @@ function App() {
       finalCartTotal: finalCartTotal
     });
     setActiveTab('order-success');
+
+    // إرسال التفاصيل وفتح واتساب تلقائياً
+    const itemsList = orderPayload.items.map(it => `• ${it.title} (${it.quantity}x) = ${formatIQD(it.price * it.quantity)}`).join('\n');
+    const msgText = encodeURIComponent(
+      `🔔 طلب جديد - متجر الأسطورة للحاسبات\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `👤 الاسم: ${orderPayload.customer_name}\n` +
+      `📞 الهاتف: ${orderPayload.customer_phone}\n` +
+      `📍 العنوان: ${orderPayload.customer_address}\n\n` +
+      `📦 الأجهزة والملحقات:\n${itemsList}\n\n` +
+      `💵 الإجمالي المطلوب: ${formatIQD(orderPayload.total_price)}\n` +
+      `━━━━━━━━━━━━━━━━━━━━\n` +
+      `يرجى تأكيد وتجهيز الطلب! 🙏`
+    );
+    window.open(`https://wa.me/${storeWhatsApp}?text=${msgText}`, '_blank');
   };
 
 
@@ -1693,7 +1708,7 @@ function App() {
                   {/* Embedded Map */}
                   <div className="rounded-xl overflow-hidden border border-gray-150 relative h-60 shadow-inner">
                     <iframe 
-                      src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3334.298715873919!2d44.440263675402095!3d33.31149457344445!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x1557816174a7eb07%3A0xe54d24a0d9b4b74e!2z2KfZhNis2KfZhdi52Kkg2KfZhNiq2YPZhtmI2YTZiNis2YrZgQ!5e0!3m2!1sar!2siq!4v1689110000000!5m2!1sar!2siq" 
+                      src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1667.147285627!2d44.442838!3d33.311494!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzPCsDE4JzQxLjQiTiA0NMKwMjYnMzQuMiJF!5e0!3m2!1sar!2siq!4v1689110000000!5m2!1sar!2siq" 
                       width="100%" 
                       height="100%" 
                       style={{ border: 0 }} 
@@ -1708,7 +1723,7 @@ function App() {
                   {/* Grid Navigation buttons side-by-side */}
                   <div className="grid grid-cols-2 gap-3">
                     <a 
-                      href="https://waze.com/ul?ll=33.311494,44.442838&navigate=yes" 
+                      href="https://waze.com/ul?q=%D8%B9%D9%85%D8%A7%D8%B1%D8%A9%20%D8%A7%D9%84%D9%86%D8%B9%D9%85%D8%A7%D9%86%20%D8%B4%D8%A7%D8%B1%D8%B9%20%D8%A7%D9%84%D8%B5%D9%86%D8%A7%D8%B9%D8%A9&navigate=yes" 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-blue-500 text-white font-extrabold text-[10px] text-center shadow-md shadow-sky-100 hover:-translate-y-0.5 hover:shadow-lg transition-all cursor-pointer"
@@ -1925,7 +1940,7 @@ function App() {
                       `رابط الصورة: ${selectedProductDetail.image_url}\n\n` +
                       `يرجى تأكيد الحجز والتوصيل!`
                     );
-                    window.open(`https://wa.me/9647801814088?text=${msgText}`, '_blank');
+                    window.open(`https://wa.me/${storeWhatsApp}?text=${msgText}`, '_blank');
                   }}
                   className="flex-1 btn-premium-glass justify-center py-3.5 text-sm cursor-pointer border-indigo-200/60 hover:bg-indigo-50/10 text-indigo-600"
                 >
@@ -3641,7 +3656,7 @@ function App() {
             <h3 className="font-bold text-gray-800 mb-3 text-sm">العنوان والتواصل</h3>
             <ul className="text-gray-500 text-xs space-y-2">
               <li>📍 {storeAddress}</li>
-              <li>📞 هاتف المتجر: {storePhone}</li>
+              <li>📞 هاتف المتجر: <span dir="ltr">{storePhone}</span></li>
               <li>⏰ التوصيل متوفر لكافة محافظات العراق</li>
             </ul>
           </div>
