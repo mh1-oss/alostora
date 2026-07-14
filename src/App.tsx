@@ -43,9 +43,9 @@ function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'laptops' | 'accessories' | 'smart-finder' | 'contact' | 'product-detail' | 'admin' | 'cart'>('home');
   
   // Currency States
-  const [currency, setCurrency] = useState<'USD' | 'IQD'>('USD');
+  const [currency, setCurrency] = useState<'USD' | 'IQD'>('IQD');
   const [exchangeRate, setExchangeRate] = useState<number>(1480);
-  const [productPricingCurrency, setProductPricingCurrency] = useState<'USD' | 'IQD'>('USD');
+  const [productPricingCurrency, setProductPricingCurrency] = useState<'USD' | 'IQD'>('IQD');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubcategory, setSelectedSubcategory] = useState<string>('all');
   const [compareList, setCompareList] = useState<Product[]>([]);
@@ -68,47 +68,62 @@ function App() {
   const [dbStatus, setDbStatus] = useState<{ connected: boolean; message: string }>({ connected: false, message: 'جاري التحميل...' });
 
   // Admin States
-  const [adminLoggedIn, setAdminLoggedIn] = useState(false);
+  const [adminLoggedIn, setAdminLoggedIn] = useState(() => !!sessionStorage.getItem('adminToken'));
   const [adminPassword, setAdminPassword] = useState('');
   const [adminUsername, setAdminUsername] = useState('');
   const [adminSubTab, setAdminSubTab] = useState<'products' | 'orders' | 'categories' | 'shipping' | 'settings'>('products');
   const [loginAttempts, setLoginAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   
-  // Admin Credential Management (with localStorage survival)
-  const [savedAdminUser, setSavedAdminUser] = useState(() => localStorage.getItem('savedAdminUser') || 'admin');
-  const [savedAdminPass, setSavedAdminPass] = useState(() => localStorage.getItem('savedAdminPass') || 'alostora2025');
+  // Store settings from DB (no localStorage)
+  const [savedAdminUser, setSavedAdminUser] = useState('admin');
+  const [savedAdminPass, setSavedAdminPass] = useState('alostora2025');
   const [newAdminUser, setNewAdminUser] = useState('');
   const [newAdminPass, setNewAdminPass] = useState('');
   const [newAdminPassConfirm, setNewAdminPassConfirm] = useState('');
 
-  // Save admin credentials updates to localStorage
-  const updateAdminCredentials = (user: string, pass: string) => {
-    if (user) {
-      setSavedAdminUser(user);
-      localStorage.setItem('savedAdminUser', user);
-    }
-    if (pass) {
-      setSavedAdminPass(pass);
-      localStorage.setItem('savedAdminPass', pass);
+  // Contact info from DB
+  const [storeWhatsApp, setStoreWhatsApp] = useState('9647801814088');
+  const [storePhone, setStorePhone] = useState('+964 780 181 4088');
+  const [storeAddress, setStoreAddress] = useState('بغداد، شارع الصناعة، مجمع الحاسبات');
+  // Edit states for contact info card
+  const [editWhatsApp, setEditWhatsApp] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editAddress, setEditAddress] = useState('');
+
+  // Save admin credentials updates to DB
+  const updateAdminCredentials = async (user: string, pass: string) => {
+    const updates: Record<string, string> = {};
+    if (user) { const u = user.trim(); setSavedAdminUser(u); updates['admin_user'] = u; }
+    if (pass) { const p = pass.trim(); setSavedAdminPass(p); updates['admin_pass'] = p; }
+    if (Object.keys(updates).length > 0) {
+      try { await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); }
+      catch (e) { console.warn('Could not save credentials to DB'); }
     }
   };
 
-  // Dynamic Budget Limits for Smart Finder (survives refreshes)
-  const [budgetLimitLow, setBudgetLimitLow] = useState<number>(() => {
-    const saved = localStorage.getItem('budgetLimitLow');
-    return saved ? parseInt(saved, 10) : 900;
-  });
-  const [budgetLimitHigh, setBudgetLimitHigh] = useState<number>(() => {
-    const saved = localStorage.getItem('budgetLimitHigh');
-    return saved ? parseInt(saved, 10) : 1300;
-  });
+  // Dynamic Budget Limits for Smart Finder (from DB)
+  const [budgetLimitLow, setBudgetLimitLow] = useState<number>(900);
+  const [budgetLimitHigh, setBudgetLimitHigh] = useState<number>(1300);
 
-  const updateBudgetLimits = (low: number, high: number) => {
+  const updateBudgetLimits = async (low: number, high: number) => {
     setBudgetLimitLow(low);
     setBudgetLimitHigh(high);
-    localStorage.setItem('budgetLimitLow', low.toString());
-    localStorage.setItem('budgetLimitHigh', high.toString());
+    try {
+      await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ budget_limit_low: low.toString(), budget_limit_high: high.toString() }) });
+    } catch (e) { console.warn('Could not save budget limits to DB'); }
+  };
+
+  // Save contact info to DB
+  const saveContactInfo = async (whatsapp: string, phone: string, address: string) => {
+    const updates: Record<string, string> = {};
+    if (whatsapp.trim()) { updates['whatsapp_number'] = whatsapp.trim(); setStoreWhatsApp(whatsapp.trim()); }
+    if (phone.trim()) { updates['phone_number'] = phone.trim(); setStorePhone(phone.trim()); }
+    if (address.trim()) { updates['store_address'] = address.trim(); setStoreAddress(address.trim()); }
+    if (Object.keys(updates).length > 0) {
+      try { await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); }
+      catch (e) { console.warn('Could not save contact info to DB'); }
+    }
   };
   
   // Bulk Shipping States
@@ -127,6 +142,7 @@ function App() {
     category: 'laptop' | 'accessory';
     subcategory: string;
     price: string;
+    discount_price: string;
     image_url: string;
     stock: string;
   }>({
@@ -134,6 +150,7 @@ function App() {
     category: 'laptop',
     subcategory: 'gaming',
     price: '',
+    discount_price: '',
     image_url: '',
     stock: '10'
   });
@@ -149,29 +166,15 @@ function App() {
   const [categories, setCategories] = useState<{
     id: string;
     name: string;
-    type: 'laptop' | 'accessory';
-  }[]>([
-    { id: 'gaming', name: '🎮 ألعاب - Gaming', type: 'laptop' },
-    { id: 'ultrabook', name: '💼 خفيف ونحيف - Ultrabook', type: 'laptop' },
-    { id: 'office', name: '🖥️ مكتبي - Office', type: 'laptop' },
-    { id: 'workstation', name: '⚙️ محطة عمل - Workstation', type: 'laptop' },
-    { id: '2in1', name: '🔄 قابل للطي - 2-in-1', type: 'laptop' },
-    { id: 'mouse', name: '🖱️ فأرة - Mouse', type: 'accessory' },
-    { id: 'keyboard', name: '⌨️ لوحة مفاتيح - Keyboard', type: 'accessory' },
-    { id: 'headset', name: '🎧 سماعة - Headset', type: 'accessory' },
-    { id: 'monitor', name: '🖥️ شاشة - Monitor', type: 'accessory' },
-    { id: 'bag', name: '🎒 حقيبة - Bag', type: 'accessory' },
-    { id: 'cooling', name: '🌀 تبريد - Cooling', type: 'accessory' },
-    { id: 'hub', name: '🔌 موزع منافذ - Hub', type: 'accessory' },
-    { id: 'mousepad', name: '⬛ لوحة فأرة - Mousepad', type: 'accessory' }
-  ]);
+    type: 'laptop' | 'accessory' | 'home';
+  }[]>([]);
 
   // Category Edit / Add modal states
   const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<{
     id: string;
     name: string;
-    type: 'laptop' | 'accessory';
+    type: 'laptop' | 'accessory' | 'home';
     isNew: boolean;
   } | null>(null);
 
@@ -213,6 +216,56 @@ function App() {
     address: ''
   });
 
+  const fallbackCategories: any[] = [
+    { id: 'gaming', name: '🎮 ألعاب - Gaming', type: 'laptop' },
+    { id: 'ultrabook', name: '💼 خفيف ونحيف - Ultrabook', type: 'laptop' },
+    { id: 'office', name: '🖥️ مكتبي - Office', type: 'laptop' },
+    { id: 'workstation', name: '⚙️ محطة عمل - Workstation', type: 'laptop' },
+    { id: '2in1', name: '🔄 قابل للطي - 2-in-1', type: 'laptop' },
+    { id: 'mouse', name: '🖱️ فأرة - Mouse', type: 'accessory' },
+    { id: 'keyboard', name: '⌨️ لوحة مفاتيح - Keyboard', type: 'accessory' },
+    { id: 'headset', name: '🎧 سماعة - Headset', type: 'accessory' },
+    { id: 'monitor', name: '🖥️ شاشة - Monitor', type: 'accessory' },
+    { id: 'bag', name: '🎒 حقيبة - Bag', type: 'accessory' },
+    { id: 'cooling', name: '🌀 تبريد - Cooling', type: 'accessory' },
+    { id: 'hub', name: '🔌 موزع منافذ - Hub', type: 'accessory' },
+    { id: 'mousepad', name: '⬛ لوحة فأرة - Mousepad', type: 'accessory' }
+  ];
+
+  const fetchCategories = async () => {
+    try {
+      const response = await fetch('/api/categories');
+      if (response.ok) {
+        const data = await response.json();
+        setCategories(data);
+      } else {
+        throw new Error();
+      }
+    } catch (e) {
+      console.warn("Could not fetch categories from server. Using fallback default categories.");
+      setCategories(fallbackCategories);
+    }
+  };
+
+  // Fetch store settings (replaces localStorage for all persistent config)
+  const fetchSettings = async () => {
+    try {
+      const response = await fetch('/api/settings');
+      if (response.ok) {
+        const data = await response.json();
+        if (data.admin_user) setSavedAdminUser(data.admin_user);
+        if (data.admin_pass) setSavedAdminPass(data.admin_pass);
+        if (data.whatsapp_number) setStoreWhatsApp(data.whatsapp_number);
+        if (data.phone_number) setStorePhone(data.phone_number);
+        if (data.store_address) setStoreAddress(data.store_address);
+        if (data.budget_limit_low) setBudgetLimitLow(parseInt(data.budget_limit_low, 10));
+        if (data.budget_limit_high) setBudgetLimitHigh(parseInt(data.budget_limit_high, 10));
+      }
+    } catch (e) {
+      console.warn('Could not fetch settings from DB, using defaults.');
+    }
+  };
+
   // Fetch Products & Backend status
   const fetchProducts = async () => {
     try {
@@ -232,9 +285,15 @@ function App() {
   };
 
   const fetchAdminData = async () => {
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) return;
     try {
-      const ordRes = await fetch('/api/orders');
-      const statsRes = await fetch('/api/stats');
+      const ordRes = await fetch('/api/orders', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const statsRes = await fetch('/api/stats', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (ordRes.ok && statsRes.ok) {
         const ordersData = await ordRes.json();
         const statsData = await statsRes.json();
@@ -248,6 +307,8 @@ function App() {
 
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
+    fetchSettings();
     // Simple client-side router for admin path
     if (window.location.pathname === '/admin') {
       setActiveTab('admin');
@@ -332,11 +393,15 @@ function App() {
     setCart(prev => prev.filter((item: { product: Product; quantity: number }) => item.product.id !== productId));
   };
 
-  const cartTotal = cart.reduce((sum: number, item: { product: Product; quantity: number }) => sum + item.product.price * item.quantity, 0);
-  // shippingRates stored in IQD — convert to USD for total calculation
-  const deliveryCostIQD = shippingRates[selectedProvince] || 0;
-  const deliveryCost = deliveryCostIQD / exchangeRate;
-  const finalCartTotal = cartTotal + deliveryCost;
+  const cartTotal = cart.reduce((sum: number, item: { product: Product; quantity: number }) => {
+    const activePrice = item.product.discount_price && Number(item.product.discount_price) > 0 
+      ? Number(item.product.discount_price) 
+      : item.product.price;
+    return sum + activePrice * item.quantity;
+  }, 0);
+  // shippingRates stored in IQD — no conversion needed since pricing is fully in IQD
+  const deliveryCost = shippingRates[selectedProvince] || 0;
+  const finalCartTotal = cartTotal + (deliveryCost / exchangeRate);
 
   // Compare Functions
   const toggleCompare = (product: Product) => {
@@ -403,7 +468,7 @@ function App() {
       `شكراً لكم، بانتظار تأكيد التوصيل!`
     );
 
-    window.open(`https://wa.me/9647801814088?text=${whatsappMessage}`, '_blank');
+    window.open(`https://wa.me/${storeWhatsApp}?text=${whatsappMessage}`, '_blank');
 
     setCart([]);
     setIsCheckoutOpen(false);
@@ -483,8 +548,8 @@ function App() {
     setFinderStep(3);
   };
 
-  // Admin Login with lockout
-  const handleAdminLogin = (e: React.FormEvent) => {
+  // Admin Login with lockout using JWT token
+  const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (lockoutUntil && Date.now() < lockoutUntil) {
@@ -493,22 +558,38 @@ function App() {
       return;
     }
     
-    if (adminUsername === savedAdminUser && adminPassword === savedAdminPass) {
-      setAdminLoggedIn(true);
-      setLoginAttempts(0);
-      setLockoutUntil(null);
-      setAdminUsername('');
-      setAdminPassword('');
-    } else {
-      const newAttempts = loginAttempts + 1;
-      setLoginAttempts(newAttempts);
-      if (newAttempts >= 5) {
-        setLockoutUntil(Date.now() + 60000);
+    const inputUser = adminUsername.trim();
+    const inputPass = adminPassword.trim();
+    
+    try {
+      const res = await fetch('/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: inputUser, password: inputPass })
+      });
+      
+      if (res.ok) {
+        const data = await res.json();
+        setAdminLoggedIn(true);
+        sessionStorage.setItem('adminToken', data.token);
         setLoginAttempts(0);
-        alert('تم تأمين الدخول لمدة 60 ثانية بعد 5 محاولات خاطئة.');
+        setLockoutUntil(null);
+        setAdminUsername('');
+        setAdminPassword('');
       } else {
-        alert(`اسم المستخدم أو رمز المرور خاطئ. المحاولات المتبقية: ${5 - newAttempts}`);
+        const data = await res.json();
+        const newAttempts = loginAttempts + 1;
+        setLoginAttempts(newAttempts);
+        if (newAttempts >= 5) {
+          setLockoutUntil(Date.now() + 60000);
+          setLoginAttempts(0);
+          alert('تم تأمين الدخول لمدة 60 ثانية بعد 5 محاولات خاطئة.');
+        } else {
+          alert(`${data.error || 'اسم المستخدم أو رمز المرور خاطئ'}. المحاولات المتبقية: ${5 - newAttempts}`);
+        }
       }
+    } catch (err) {
+      alert("حدث خطأ أثناء الاتصال بخادم الأمان.");
     }
   };
 
@@ -516,7 +597,7 @@ function App() {
   const formatPrice = (rawPrice: number | string | undefined) => {
     const usdPrice = Number(rawPrice) || 0;
     if (currency === 'IQD') {
-      return `${Math.round(usdPrice * exchangeRate).toLocaleString('ar-IQ')} د.ع`;
+      return `${Math.round(usdPrice * exchangeRate).toLocaleString('en-US')} د.ع`;
     }
     return `$${usdPrice.toFixed(2)}`;
   };
@@ -529,8 +610,33 @@ function App() {
     return formatPrice(usdEquiv);
   };
 
+  // Helper to render price badge with discount (returns JSX)
+  const renderProductPrice = (product: Product) => {
+    const originalPrice = product.price;
+    const discountPrice = product.discount_price;
+
+    if (discountPrice && Number(discountPrice) > 0) {
+      return (
+        <div className="flex flex-col items-end gap-0.5">
+          <span className="text-[10px] text-gray-400 line-through font-bold">
+            {formatIQD(originalPrice)}
+          </span>
+          <span className="font-black text-red-500 text-base md:text-lg">
+            {formatIQD(discountPrice)}
+          </span>
+        </div>
+      );
+    }
+
+    return (
+      <span className="font-black text-indigo-650 text-base md:text-lg">
+        {formatIQD(originalPrice)}
+      </span>
+    );
+  };
+
   // Format IQD value directly (for shipping rates which are stored in IQD)
-  const formatIQD = (iqd: number) => `${Math.round(iqd).toLocaleString('ar-IQ')} د.ع`;
+  const formatIQD = (iqd: number) => `${Math.round(iqd).toLocaleString('en-US')} د.ع`;
   const handleAddOrEditProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const specsObj = specList.reduce((acc, item) => {
@@ -545,6 +651,7 @@ function App() {
       category: adminForm.category,
       subcategory: adminForm.subcategory,
       price: parseFloat(adminForm.price),
+      discount_price: adminForm.discount_price.trim() ? parseFloat(adminForm.discount_price) : null,
       image_url: adminForm.image_url || "https://images.unsplash.com/photo-1593642632823-8f785ba67e45?auto=format&fit=crop&w=600&q=80",
       specs: specsObj,
       stock: parseInt(adminForm.stock)
@@ -554,9 +661,13 @@ function App() {
       const url = editingProductId ? `/api/products/${editingProductId}` : '/api/products';
       const method = editingProductId ? 'PUT' : 'POST';
 
+      const token = sessionStorage.getItem('adminToken') || '';
       const response = await fetch(url, {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify(payload)
       });
 
@@ -567,6 +678,7 @@ function App() {
           category: 'laptop',
           subcategory: 'gaming',
           price: '',
+          discount_price: '',
           image_url: '',
           stock: '10'
         });
@@ -587,6 +699,7 @@ function App() {
       category: product.category,
       subcategory: product.subcategory,
       price: product.price.toString(),
+      discount_price: product.discount_price ? product.discount_price.toString() : '',
       image_url: product.image_url,
       stock: product.stock.toString()
     });
@@ -606,7 +719,11 @@ function App() {
     if (!confirm("هل تود إزالة المنتج من المعروضات؟")) return;
 
     try {
-      const response = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+      const token = sessionStorage.getItem('adminToken') || '';
+      const response = await fetch(`/api/products/${id}`, { 
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
       if (response.ok) {
         alert("تم الحذف بنجاح.");
         fetchProducts();
@@ -666,7 +783,7 @@ function App() {
         <div className="p-4 border-t border-gray-150/50 bg-gray-50/50 flex flex-col gap-3">
           <div className="flex justify-between items-center">
             <span className="text-[10px] font-semibold text-gray-400">السعر النقدي</span>
-            <span className="text-xl font-black text-indigo-600">{formatProductPrice(product.price)}</span>
+            {renderProductPrice(product)}
           </div>
 
           <div className="grid grid-cols-3 gap-2">
@@ -795,14 +912,7 @@ function App() {
 
               {/* Status indicator, Search & Cart trigger */}
               <div className="flex items-center gap-2.5">
-                {/* Currency Toggle (Hidden on mobile header, shown on desktop) */}
-                <button 
-                  onClick={() => setCurrency(c => c === 'USD' ? 'IQD' : 'USD')}
-                  className="hidden lg:flex p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all items-center gap-1.5 cursor-pointer text-xs font-black"
-                  title="تبديل العملة"
-                >
-                  <span>{currency === 'USD' ? '🇺🇸 USD' : '🇮🇶 IQD'}</span>
-                </button>
+
 
                 {/* Search trigger button */}
                 <button 
@@ -965,32 +1075,7 @@ function App() {
               اتصل بنا
             </button>
 
-            {/* Mobile Currency Selector */}
-            <div className="w-full pt-3 flex flex-col items-center gap-2">
-              <span className="text-[10px] font-black text-gray-400">عملة عرض الأسعار</span>
-              <div className="flex gap-2.5 w-full max-w-xs">
-                <button
-                  onClick={() => { setCurrency('USD'); setIsMobileMenuOpen(false); }}
-                  className={`flex-1 py-2 rounded-xl text-xs font-black cursor-pointer transition-all border ${
-                    currency === 'USD' 
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
-                      : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                  }`}
-                >
-                  🇺🇸 دولار (USD)
-                </button>
-                <button
-                  onClick={() => { setCurrency('IQD'); setIsMobileMenuOpen(false); }}
-                  className={`flex-1 py-2 rounded-xl text-xs font-black cursor-pointer transition-all border ${
-                    currency === 'IQD' 
-                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
-                      : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
-                  }`}
-                >
-                  🇮🇶 دينار (IQD)
-                </button>
-              </div>
-            </div>
+
           </motion.div>
         )}
       </AnimatePresence>
@@ -1091,46 +1176,34 @@ function App() {
               </button>
               {activeTab === 'laptops' && (
                 <>
-                  <button 
-                    onClick={() => setSelectedSubcategory('gaming')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedSubcategory === 'gaming' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    لابتوبات قيمنق
-                  </button>
-                  <button 
-                    onClick={() => setSelectedSubcategory('ultrabook')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedSubcategory === 'ultrabook' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    الترا بوك خفيف
-                  </button>
-                  <button 
-                    onClick={() => setSelectedSubcategory('office')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedSubcategory === 'office' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    للدراسة والأعمال
-                  </button>
+                  {categories
+                    .filter(c => c.type === 'laptop')
+                    .map(cat => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setSelectedSubcategory(cat.id)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedSubcategory === cat.id ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        {cat.name}
+                      </button>
+                    ))
+                  }
                 </>
               )}
               {activeTab === 'accessories' && (
                 <>
-                  <button 
-                    onClick={() => setSelectedSubcategory('mouse')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedSubcategory === 'mouse' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    ماوسات
-                  </button>
-                  <button 
-                    onClick={() => setSelectedSubcategory('keyboard')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedSubcategory === 'keyboard' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    كيبوردات
-                  </button>
-                  <button 
-                    onClick={() => setSelectedSubcategory('headset')}
-                    className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedSubcategory === 'headset' ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-                  >
-                    سماعات
-                  </button>
+                  {categories
+                    .filter(c => c.type === 'accessory')
+                    .map(cat => (
+                      <button
+                        key={cat.id}
+                        onClick={() => setSelectedSubcategory(cat.id)}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${selectedSubcategory === cat.id ? 'bg-indigo-600 text-white shadow-md' : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                      >
+                        {cat.name}
+                      </button>
+                    ))
+                  }
                 </>
               )}
             </div>
@@ -1141,47 +1214,83 @@ function App() {
         <main className="container mx-auto px-6 md:px-12 pb-20 max-w-7xl">
           {activeTab === 'home' ? (
             <>
-              {/* Laptops Section */}
-              <div className="mb-16">
-                <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
-                  <h2 className="text-2xl font-black flex items-center gap-2">
-                    <span>💻 أجهزة لابتوب مميزة</span>
-                    <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
-                      {filteredProducts.filter((p: Product) => p.category === 'laptop').length} جهاز
-                    </span>
-                  </h2>
-                </div>
-                {filteredProducts.filter((p: Product) => p.category === 'laptop').length === 0 ? (
-                  <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
-                    لا تتوفر أجهزة لابتوب مطابقة للبحث حالياً.
-                  </div>
-                ) : (
-                  <div className="products-grid">
-                    {filteredProducts.filter((p: Product) => p.category === 'laptop').map((product: Product) => renderProductCard(product))}
-                  </div>
-                )}
-              </div>
+              {/* Render dynamic homepage category sections */}
+              {(() => {
+                const homeCats = (categories as any[]).filter(c => c.type === 'home');
+                if (homeCats.length > 0) {
+                  return homeCats.map(cat => {
+                    const catProducts = filteredProducts.filter((p: Product) => p.subcategory === cat.id);
+                    return (
+                      <div key={cat.id} className="mb-16">
+                        <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
+                          <h2 className="text-2xl font-black flex items-center gap-2">
+                            <span>{cat.name}</span>
+                            <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
+                              {catProducts.length} منتج
+                            </span>
+                          </h2>
+                        </div>
+                        {catProducts.length === 0 ? (
+                          <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
+                            لا تتوفر منتجات في هذا القسم حالياً.
+                          </div>
+                        ) : (
+                          <div className="products-grid">
+                            {catProducts.map((product: Product) => renderProductCard(product))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                }
 
-              {/* Accessories Section */}
-              <div>
-                <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
-                  <h2 className="text-2xl font-black flex items-center gap-2">
-                    <span>🎧 إكسسوارات وملحقات احترافية</span>
-                    <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
-                      {filteredProducts.filter((p: Product) => p.category === 'accessory').length} ملحق
-                    </span>
-                  </h2>
-                </div>
-                {filteredProducts.filter((p: Product) => p.category === 'accessory').length === 0 ? (
-                  <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
-                    لا تتوفر إكسسوارات مطابقة للبحث حالياً.
-                  </div>
-                ) : (
-                  <div className="products-grid">
-                    {filteredProducts.filter((p: Product) => p.category === 'accessory').map((product: Product) => renderProductCard(product))}
-                  </div>
-                )}
-              </div>
+                // Fallback layout if no dynamic home categories exist
+                return (
+                  <>
+                    {/* Laptops Section */}
+                    <div className="mb-16">
+                      <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
+                        <h2 className="text-2xl font-black flex items-center gap-2">
+                          <span>💻 أجهزة لابتوب مميزة</span>
+                          <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
+                            {filteredProducts.filter((p: Product) => p.category === 'laptop').length} جهاز
+                          </span>
+                        </h2>
+                      </div>
+                      {filteredProducts.filter((p: Product) => p.category === 'laptop').length === 0 ? (
+                        <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
+                          لا تتوفر أجهزة لابتوب مطابقة للبحث حالياً.
+                        </div>
+                      ) : (
+                        <div className="products-grid">
+                          {filteredProducts.filter((p: Product) => p.category === 'laptop').map((product: Product) => renderProductCard(product))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Accessories Section */}
+                    <div>
+                      <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
+                        <h2 className="text-2xl font-black flex items-center gap-2">
+                          <span>🎧 إكسسوارات وملحقات احترافية</span>
+                          <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
+                            {filteredProducts.filter((p: Product) => p.category === 'accessory').length} ملحق
+                          </span>
+                        </h2>
+                      </div>
+                      {filteredProducts.filter((p: Product) => p.category === 'accessory').length === 0 ? (
+                        <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
+                          لا تتوفر إكسسوارات مطابقة للبحث حالياً.
+                        </div>
+                      ) : (
+                        <div className="products-grid">
+                          {filteredProducts.filter((p: Product) => p.category === 'accessory').map((product: Product) => renderProductCard(product))}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                );
+              })()}
             </>
           ) : (
             <>
@@ -1450,7 +1559,7 @@ function App() {
               </div>
               <div>
                 <span className="text-[10px] text-gray-400 font-bold block mb-0.5">موقع المعرض</span>
-                <span className="text-xs text-gray-800 font-black">بغداد، شارع الصناعة، مجمع الحاسبات</span>
+                <span className="text-xs text-gray-800 font-black">{storeAddress}</span>
               </div>
             </div>
 
@@ -1461,7 +1570,7 @@ function App() {
               </div>
               <div>
                 <span className="text-[10px] text-gray-400 font-bold block mb-0.5">الهاتف المباشر</span>
-                <span className="text-xs text-gray-800 font-black" dir="ltr">+964 780 181 4088</span>
+                <span className="text-xs text-gray-800 font-black" dir="ltr">{storePhone}</span>
               </div>
             </div>
           </div>
@@ -1501,7 +1610,7 @@ function App() {
                     </a>
 
                     <a 
-                      href="https://wa.me/9647801814088" 
+                      href={`https://wa.me/${storeWhatsApp}`} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 text-white font-extrabold text-[10px] text-center shadow-md shadow-emerald-100 hover:-translate-y-0.5 hover:shadow-lg transition-all cursor-pointer"
@@ -1628,8 +1737,7 @@ function App() {
                 <div>
                   <span className="text-[10px] text-gray-400 block font-bold mb-0.5">السعر النقدي المعتمد</span>
                   <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-black text-indigo-600">{formatProductPrice(selectedProductDetail.price)}</span>
-                    <span className="text-xs font-bold text-gray-400">{currency === 'IQD' ? 'دينار عراقي' : 'بالدولار الأمريكي'}</span>
+                    {renderProductPrice(selectedProductDetail)}
                   </div>
                 </div>
                 
@@ -2051,7 +2159,7 @@ function App() {
                   <h2 className="text-2xl font-black">لوحة الإشراف والمبيعات ⚙️</h2>
                   <p className="text-xs text-gray-400">إدارة المنتجات، متابعة فواتير الواتساب، والتحقق من التزامن بقاعدة بيانات Neon</p>
                 </div>
-                <button onClick={() => setAdminLoggedIn(false)} className="btn-premium-glass text-xs py-2 px-4 cursor-pointer">
+                <button onClick={() => { setAdminLoggedIn(false); sessionStorage.removeItem('adminToken'); }} className="btn-premium-glass text-xs py-2 px-4 cursor-pointer">
                   خروج المسؤول
                 </button>
               </div>
@@ -2157,6 +2265,7 @@ function App() {
                           category: 'laptop',
                           subcategory: 'gaming',
                           price: '',
+                          discount_price: '',
                           image_url: '',
                           stock: '10'
                         });
@@ -2254,6 +2363,25 @@ function App() {
                               </button>
                               {categories
                                 .filter(c => c.type === 'accessory')
+                                .map(cat => (
+                                  <button
+                                    key={cat.id}
+                                    type="button"
+                                    onClick={() => { setAdminCategoryFilter(cat.id); setIsFilterDropdownOpen(false); }}
+                                    className={`w-full text-right px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer block ${adminCategoryFilter === cat.id ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-gray-50 text-gray-500'}`}
+                                  >
+                                    {cat.name}
+                                  </button>
+                                ))
+                              }
+                            </div>
+
+                            <div className="border-t border-gray-100 my-1"></div>
+
+                            <div className="px-3 py-1 text-[10px] font-black text-indigo-650 bg-indigo-50/40 rounded-md">🏠 أقسام الصفحة الرئيسية</div>
+                            <div className="mr-1.5 space-y-0.5 border-r border-indigo-100 pr-1.5 mt-1">
+                              {(categories as any[])
+                                .filter(c => c.type === 'home')
                                 .map(cat => (
                                   <button
                                     key={cat.id}
@@ -2384,8 +2512,8 @@ function App() {
                             <div className="flex flex-wrap items-center justify-between md:justify-end gap-6 w-full md:w-auto border-t md:border-t-0 pt-3 md:pt-0">
                               {/* Price */}
                               <div className="text-right">
-                                <span className="text-[10px] text-gray-400 block font-bold">السعر بالدولار</span>
-                                <span className="font-black text-indigo-600 text-base">${p.price}</span>
+                                <span className="text-[10px] text-gray-400 block font-bold">السعر الحالي</span>
+                                <span className="font-black text-indigo-600 text-base">{formatIQD(p.price)}</span>
                               </div>
 
                               {/* Stock status */}
@@ -2516,21 +2644,41 @@ function App() {
               {adminSubTab === 'categories' && (
                 <div className="space-y-6">
                   {/* Category Header Actions */}
-                  <div className="flex justify-between items-center bg-white/60 p-4 rounded-2xl border border-white shadow-sm">
+                  <div className="flex flex-col sm:flex-row justify-between items-center bg-white/60 p-4 rounded-2xl border border-white shadow-sm gap-3">
                     <span className="text-xs font-black text-gray-800">📂 إدارة أقسام وتصنيفات المتجر</span>
-                    <button
-                      onClick={() => {
-                        setEditingCategory({ id: '', name: '', type: 'laptop', isNew: true });
-                        setIsCategoryModalOpen(true);
-                      }}
-                      className="btn-premium-primary text-xs py-2.5 px-4 cursor-pointer flex items-center gap-1.5 shadow-md shadow-indigo-100 animate-pulse hover:animate-none"
-                    >
-                      <span>➕ إضافة تصنيف فرعي جديد</span>
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => {
+                          setEditingCategory({ id: '', name: '', type: 'laptop', isNew: true });
+                          setIsCategoryModalOpen(true);
+                        }}
+                        className="btn-premium-primary text-[10px] py-2 px-3 cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <span>➕ إضافة قسم لابتوب جديد</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingCategory({ id: '', name: '', type: 'accessory', isNew: true });
+                          setIsCategoryModalOpen(true);
+                        }}
+                        className="btn-premium-glass text-[10px] py-2 px-3 cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <span>➕ إضافة قسم ملحقات جديد</span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingCategory({ id: '', name: '', type: 'home' as any, isNew: true });
+                          setIsCategoryModalOpen(true);
+                        }}
+                        className="btn-premium-glass text-[10px] py-2 px-3 border-indigo-200 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50 cursor-pointer flex items-center gap-1.5 shadow-sm"
+                      >
+                        <span>➕ إضافة قسم للرئيسية جديد</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Category stats dashboard overview */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {/* Laptops Main Category Card */}
                     <div className="card-glass flat p-6 bg-white/95 border-indigo-100 shadow-sm space-y-4">
                       <div className="flex items-center gap-3 border-b pb-3.5">
@@ -2575,13 +2723,23 @@ function App() {
                                       <Edit3 size={11} />
                                     </button>
                                     <button
-                                      onClick={() => {
+                                      onClick={async () => {
                                         if (count > 0) {
                                           alert(`لا يمكن حذف هذا التصنيف لأنه يحتوي على ${count} أجهزة معروضة حالياً! يرجى نقل أو حذف الأجهزة أولاً.`);
                                           return;
                                         }
                                         if (confirm(`هل أنت متأكد من حذف تصنيف (${sub.name}) نهائياً؟`)) {
-                                          setCategories(prev => prev.filter(c => c.id !== sub.id));
+                                          try {
+                                            const res = await fetch(`/api/categories/${sub.id}`, { method: 'DELETE' });
+                                            if (res.ok) {
+                                              alert("تم حذف التصنيف بنجاح.");
+                                              fetchCategories();
+                                            } else {
+                                              alert("فشل حذف التصنيف.");
+                                            }
+                                          } catch (err) {
+                                            alert("حدث خطأ أثناء الاتصال بالخادم.");
+                                          }
                                         }
                                       }}
                                       className="p-1 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-all"
@@ -2641,13 +2799,23 @@ function App() {
                                       <Edit3 size={11} />
                                     </button>
                                     <button
-                                      onClick={() => {
+                                      onClick={async () => {
                                         if (count > 0) {
                                           alert(`لا يمكن حذف هذا التصنيف لأنه يحتوي على ${count} ملحقات معروضة حالياً! يرجى نقل أو حذف الأجهزة أولاً.`);
                                           return;
                                         }
                                         if (confirm(`هل أنت متأكد من حذف تصنيف (${sub.name}) نهائياً؟`)) {
-                                          setCategories(prev => prev.filter(c => c.id !== sub.id));
+                                          try {
+                                            const res = await fetch(`/api/categories/${sub.id}`, { method: 'DELETE' });
+                                            if (res.ok) {
+                                              alert("تم حذف التصنيف بنجاح.");
+                                              fetchCategories();
+                                            } else {
+                                              alert("فشل حذف التصنيف.");
+                                            }
+                                          } catch (err) {
+                                            alert("حدث خطأ أثناء الاتصال بالخادم.");
+                                          }
                                         }
                                       }}
                                       className="p-1 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-all"
@@ -2660,6 +2828,86 @@ function App() {
                               </div>
                             );
                           })}
+                      </div>
+                    </div>
+
+                    {/* Home Main Category Card (New) */}
+                    <div className="card-glass flat p-6 bg-white/95 border-indigo-100 shadow-sm space-y-4">
+                      <div className="flex items-center gap-3 border-b pb-3.5">
+                        <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
+                          <Compass size={22} />
+                        </div>
+                        <div>
+                          <h3 className="font-black text-gray-900 text-base">🏠 عروض الصفحة الرئيسية</h3>
+                          <span className="text-[10px] text-gray-400 font-bold block">إجمالي الأقسام: {(categories as any[]).filter(c => c.type === 'home').length} قسم</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2.5">
+                        {(categories as any[]).filter(c => c.type === 'home').length === 0 ? (
+                          <div className="text-center py-6 text-gray-400 text-xs font-bold">لا توجد أقسام رئيسية مضافة للرئيسية بعد.</div>
+                        ) : (
+                          (categories as any[])
+                            .filter(c => c.type === 'home')
+                            .map(sub => {
+                              const count = products.filter(p => p.subcategory === sub.id).length;
+                              return (
+                                <div key={sub.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50/50 hover:bg-indigo-50/30 transition-all group">
+                                  <span className="font-bold text-xs text-gray-800">{sub.name}</span>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[10px] font-black text-indigo-650 bg-indigo-50 px-2 py-0.5 rounded-md">{count} منتج</span>
+                                    <button
+                                      onClick={() => {
+                                        setAdminCategoryFilter(sub.id);
+                                        setAdminSubTab('products');
+                                      }}
+                                      className="text-[10px] font-bold text-indigo-600 hover:underline cursor-pointer"
+                                      title="عرض المنتجات التابعة لهذا القسم"
+                                    >
+                                      عرض 🔍
+                                    </button>
+                                    <div className="flex gap-1 border-r pr-2 border-gray-200">
+                                      <button
+                                        onClick={() => {
+                                          setEditingCategory({ id: sub.id, name: sub.name, type: 'home' as any, isNew: false });
+                                          setIsCategoryModalOpen(true);
+                                        }}
+                                        className="p-1 text-indigo-650 hover:bg-indigo-50 rounded cursor-pointer transition-all"
+                                        title="تعديل اسم القسم"
+                                      >
+                                        <Edit3 size={11} />
+                                      </button>
+                                      <button
+                                        onClick={async () => {
+                                          if (count > 0) {
+                                            alert(`لا يمكن حذف هذا القسم لأنه يحتوي على ${count} منتجات معروضة حالياً!`);
+                                            return;
+                                          }
+                                          if (confirm(`هل أنت متأكد من حذف قسم (${sub.name}) نهائياً؟`)) {
+                                            try {
+                                              const res = await fetch(`/api/categories/${sub.id}`, { method: 'DELETE' });
+                                              if (res.ok) {
+                                                alert("تم حذف التصنيف بنجاح.");
+                                                fetchCategories();
+                                              } else {
+                                                alert("فشل حذف التصنيف.");
+                                              }
+                                            } catch (err) {
+                                              alert("حدث خطأ أثناء الاتصال بالخادم.");
+                                            }
+                                          }
+                                        }}
+                                        className="p-1 text-red-500 hover:bg-red-50 rounded cursor-pointer transition-all"
+                                        title="حذف القسم"
+                                      >
+                                        <Trash2 size={11} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2691,7 +2939,7 @@ function App() {
                       </button>
                     </div>
 
-                    <form onSubmit={(e) => {
+                    <form onSubmit={async (e) => {
                       e.preventDefault();
                       if (editingCategory.isNew) {
                         // Check if ID already exists
@@ -2699,11 +2947,28 @@ function App() {
                           alert("معرف التصنيف هذا موجود بالفعل! يرجى استخدام معرف فريد.");
                           return;
                         }
-                        setCategories(prev => [...prev, { id: editingCategory.id, name: editingCategory.name, type: editingCategory.type }]);
-                      } else {
-                        setCategories(prev => prev.map(c => c.id === editingCategory.id ? { ...c, name: editingCategory.name, type: editingCategory.type } : c));
                       }
-                      setIsCategoryModalOpen(false);
+                      
+                      try {
+                        const response = await fetch('/api/categories', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            id: editingCategory.id,
+                            name: editingCategory.name,
+                            type: editingCategory.type
+                          })
+                        });
+                        if (response.ok) {
+                          alert("تم حفظ التصنيف بنجاح!");
+                          fetchCategories();
+                          setIsCategoryModalOpen(false);
+                        } else {
+                          alert("فشل في حفظ التصنيف.");
+                        }
+                      } catch (err) {
+                        alert("حدث خطأ أثناء الاتصال بالخادم.");
+                      }
                     }} className="space-y-4 text-right">
                       {editingCategory.isNew && (
                         <div className="flex flex-col gap-1.5">
@@ -2740,6 +3005,7 @@ function App() {
                         >
                           <option value="laptop">💻 لابتوب</option>
                           <option value="accessory">🔌 إكسسوار</option>
+                          <option value="home">🏠 الرئيسية (عرض خاص)</option>
                         </select>
                       </div>
 
@@ -2840,26 +3106,83 @@ function App() {
               {adminSubTab === 'settings' && (
                 <div className="space-y-6 animate-fadeIn" dir="rtl">
 
+                  {/* Contact Info */}
+                  <div className="card-glass flat p-6 bg-white/90 border-white shadow-sm space-y-5">
+                    <h3 className="font-extrabold text-sm text-gray-800 border-b pb-3">📞 معلومات التواصل والمتجر</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-gray-700">رقم واتساب المتجر (بدون +)</label>
+                        <input
+                          type="text"
+                          placeholder={`الحالي: ${storeWhatsApp}`}
+                          value={editWhatsApp}
+                          onChange={e => setEditWhatsApp(e.target.value)}
+                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
+                          dir="ltr"
+                        />
+                        <p className="text-[10px] text-gray-400">مثال: 9647801814088 (بدون + وبدون مسافات)</p>
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-gray-700">رقم الهاتف للعرض</label>
+                        <input
+                          type="text"
+                          placeholder={`الحالي: ${storePhone}`}
+                          value={editPhone}
+                          onChange={e => setEditPhone(e.target.value)}
+                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
+                          dir="ltr"
+                        />
+                        <p className="text-[10px] text-gray-400">الرقم الظاهر في صفحة اتصل بنا والفوتر.</p>
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-black text-gray-700">عنوان المتجر</label>
+                      <input
+                        type="text"
+                        placeholder={`الحالي: ${storeAddress}`}
+                        value={editAddress}
+                        onChange={e => setEditAddress(e.target.value)}
+                        className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!editWhatsApp && !editPhone && !editAddress) {
+                          alert('أدخل على الأقل قيمة واحدة للتحديث.');
+                          return;
+                        }
+                        await saveContactInfo(editWhatsApp, editPhone, editAddress);
+                        setEditWhatsApp('');
+                        setEditPhone('');
+                        setEditAddress('');
+                        alert('✅ تم حفظ معلومات التواصل بنجاح!');
+                      }}
+                      className="btn-premium-primary text-xs py-3 px-6 cursor-pointer"
+                    >
+                      حفظ معلومات التواصل 📞
+                    </button>
+                  </div>
+
                   {/* Currency & Exchange Rate */}
                   <div className="card-glass flat p-6 bg-white/90 border-white shadow-sm space-y-5">
-                    <h3 className="font-extrabold text-sm text-gray-800 border-b pb-3">💱 إعدادات العملة وسعر الصرف</h3>
+                    <h3 className="font-extrabold text-sm text-gray-800 border-b pb-3">💱 إعدادات سعر الصرف (الافتراضي دينار عراقي)</h3>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                       <div className="space-y-1.5">
-                        <label className="text-xs font-black text-gray-700">عملة التسعير (عند إضافة المنتجات)</label>
+                        <label className="text-xs font-black text-gray-700">عملة التسعير الحالية</label>
                         <select
-                          value={productPricingCurrency}
-                          onChange={e => setProductPricingCurrency(e.target.value as 'USD' | 'IQD')}
-                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
+                          disabled
+                          value="IQD"
+                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-gray-50 text-gray-500 cursor-not-allowed"
                         >
-                          <option value="USD">🇺🇸 دولار أمريكي (USD)</option>
-                          <option value="IQD">🇮🇶 دينار عراقي (IQD)</option>
+                          <option value="IQD">🇮🇶 دينار عراقي (IQD) - افتراضي بالكامل</option>
                         </select>
-                        <p className="text-[10px] text-gray-400">بهذه العملة يتم إدخال أسعار المنتجات في النظام.</p>
+                        <p className="text-[10px] text-gray-400">تم تثبيت عملة الموقع على الدينار العراقي بالكامل.</p>
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-xs font-black text-gray-700">سعر صرف الدولار (1 USD = ? IQD)</label>
+                        <label className="text-xs font-black text-gray-700">سعر الصرف الداخلي (1 USD = ? IQD)</label>
                         <input
                           type="number"
                           min="1"
@@ -2867,12 +3190,8 @@ function App() {
                           onChange={e => setExchangeRate(parseFloat(e.target.value) || 1480)}
                           className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
                         />
-                        <p className="text-[10px] text-gray-400">مثال: الدولار = {exchangeRate.toLocaleString('ar-IQ')} دينار</p>
+                        <p className="text-[10px] text-gray-400">سعر الصرف الداخلي للتحويل إذا تم إدخال قيم خارجية: {exchangeRate.toLocaleString('en-US')} دينار</p>
                       </div>
-                    </div>
-
-                    <div className="bg-gray-50 rounded-xl p-3 text-xs font-bold text-gray-600">
-                      معاينة التحويل: $100 = {(100 * exchangeRate).toLocaleString('ar-IQ')} د.ع
                     </div>
                   </div>
 
@@ -2955,7 +3274,7 @@ function App() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         if (!newAdminUser && !newAdminPass) {
                           alert('أدخل اسم المستخدم أو كلمة المرور الجديدة على الأقل.');
                           return;
@@ -2968,7 +3287,7 @@ function App() {
                           alert('يجب أن تكون كلمة المرور 6 أحرف على الأقل.');
                           return;
                         }
-                        updateAdminCredentials(newAdminUser, newAdminPass);
+                        await updateAdminCredentials(newAdminUser, newAdminPass);
                         setNewAdminUser('');
                         setNewAdminPass('');
                         setNewAdminPassConfirm('');
@@ -2996,8 +3315,8 @@ function App() {
           <div>
             <h3 className="font-bold text-gray-800 mb-3 text-sm">العنوان والتواصل</h3>
             <ul className="text-gray-500 text-xs space-y-2">
-              <li>📍 بغداد، شارع الصناعة، مجمع الحاسبات</li>
-              <li>📞 هاتف المتجر: +964 780 181 4088</li>
+              <li>📍 {storeAddress}</li>
+              <li>📞 هاتف المتجر: {storePhone}</li>
               <li>⏰ التوصيل متوفر لكافة محافظات العراق</li>
             </ul>
           </div>
@@ -3063,7 +3382,7 @@ function App() {
                     {quickViewProduct.category === 'laptop' ? 'لابتوب' : 'ملحق'} - {quickViewProduct.subcategory}
                   </span>
                   <h3 className="text-xl font-black text-gray-900 mb-2">{quickViewProduct.title}</h3>
-                  <p className="text-2xl font-black text-indigo-600 mb-4">{formatProductPrice(quickViewProduct.price)}</p>
+                  <div className="mb-4">{renderProductPrice(quickViewProduct)}</div>
                   
                   <div className="space-y-2 border-t pt-4 text-xs">
                     <span className="font-bold text-gray-700 block mb-2">المواصفات الفنية:</span>
@@ -3190,25 +3509,36 @@ function App() {
                     required
                     className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
                   >
-                    {categories
-                      .filter(c => c.type === adminForm.category)
+                    {(categories as any[])
+                      .filter(c => c.type === adminForm.category || c.type === 'home')
                       .map(cat => (
-                        <option key={cat.id} value={cat.id}>{cat.name}</option>
+                        <option key={cat.id} value={cat.id}>{cat.name} ({cat.type === 'home' ? 'رئيسية' : 'عام'})</option>
                       ))
                     }
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-black text-gray-700">السعر بالدولار ($) *</label>
+                  <label className="text-xs font-black text-gray-700">السعر بالدينار العراقي (د.ع) *</label>
                   <input 
                     type="number" 
-                    placeholder="السعر النقدي"
+                    placeholder="مثال: 1500000"
                     value={adminForm.price}
                     onChange={e => setAdminForm(prev => ({ ...prev, price: e.target.value }))}
                     required
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
+                  />
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-black text-gray-700">سعر الخصم / التخفيض (اختياري)</label>
+                  <input 
+                    type="number" 
+                    placeholder="مثال: 1250000"
+                    value={adminForm.discount_price}
+                    onChange={e => setAdminForm(prev => ({ ...prev, discount_price: e.target.value }))}
                     className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
                   />
                 </div>

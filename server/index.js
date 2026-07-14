@@ -1,12 +1,53 @@
 import express from 'express';
 import cors from 'cors';
-import { pool, initDB } from './db.js';
+import jwt from 'jsonwebtoken';
+import { pool, sql, initDB } from './db.js';
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const JWT_SECRET = 'alostora_secret_key_2026_secure';
 
 app.use(cors());
 app.use(express.json());
+
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'مطلوب تسجيل الدخول كمسؤول' });
+
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'توكن منتهي الصلاحية أو غير صالح' });
+    req.user = user;
+    next();
+  });
+};
+
+// API Endpoint for Admin Login returning a JWT Token
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  let adminUser = 'admin';
+  let adminPass = 'alostora2025';
+
+  if (sql) {
+    try {
+      const rows = await sql.query('SELECT value FROM store_settings WHERE key = $1', ['admin_user']);
+      const passRows = await sql.query('SELECT value FROM store_settings WHERE key = $1', ['admin_pass']);
+      if (rows.length > 0) adminUser = rows[0].value;
+      if (passRows.length > 0) adminPass = passRows[0].value;
+    } catch (e) {
+      console.error('Fetch settings login error:', e.message);
+    }
+  }
+
+  if (username === adminUser && password === adminPass) {
+    const token = jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '12h' });
+    return res.json({ success: true, token });
+  } else {
+    return res.status(401).json({ error: 'خطأ في اسم المستخدم أو كلمة المرور' });
+  }
+});
+
 
 // In-memory fallback if Neon DATABASE_URL is not set
 let tempProducts = [
@@ -162,89 +203,70 @@ app.get('/api/products', async (req, res) => {
 });
 
 // 2. Add product (Admin)
-app.post('/api/products', async (req, res) => {
-  const { title, category, subcategory, price, image_url, specs, stock } = req.body;
-  if (!pool) {
+app.post('/api/products', authenticateToken, async (req, res) => {
+  const { title, category, subcategory, price, discount_price, image_url, specs, stock } = req.body;
+  if (!sql) {
     const newProduct = {
       id: tempProducts.length ? Math.max(...tempProducts.map(p => p.id)) + 1 : 1,
-      title,
-      category,
-      subcategory,
-      price: parseFloat(price),
-      image_url,
-      specs: specs || {},
-      stock: parseInt(stock) || 10
+      title, category, subcategory, price: parseFloat(price), discount_price: discount_price ? parseFloat(discount_price) : null, image_url, specs: specs || {}, stock: parseInt(stock) || 10
     };
     tempProducts.unshift(newProduct);
     return res.status(201).json(newProduct);
   }
   try {
-    const result = await pool.query(
-      'INSERT INTO products (title, category, subcategory, price, image_url, specs, stock) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-      [title, category, subcategory, price, image_url, JSON.stringify(specs || {}), stock]
+    const rows = await sql.query(
+      'INSERT INTO products (title, category, subcategory, price, discount_price, image_url, specs, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+      [title, category, subcategory, price, discount_price ? parseFloat(discount_price) : null, image_url, JSON.stringify(specs || {}), stock]
     );
-    res.status(201).json(result.rows[0]);
+    res.status(201).json(rows[0]);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "حدث خطأ أثناء إضافة المنتج" });
+    console.error('Add product error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ أثناء إضافة المنتج: ' + error.message });
   }
 });
 
 // 3. Update product (Admin)
-app.put('/api/products/:id', async (req, res) => {
+app.put('/api/products/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  const { title, category, subcategory, price, image_url, specs, stock } = req.body;
-
-  if (!pool) {
+  const { title, category, subcategory, price, discount_price, image_url, specs, stock } = req.body;
+  if (!sql) {
     const idx = tempProducts.findIndex(p => p.id === parseInt(id));
     if (idx !== -1) {
-      tempProducts[idx] = {
-        ...tempProducts[idx],
-        title,
-        category,
-        subcategory,
-        price: parseFloat(price),
-        image_url,
-        specs: specs || {},
-        stock: parseInt(stock) || 10
-      };
+      tempProducts[idx] = { ...tempProducts[idx], title, category, subcategory, price: parseFloat(price), discount_price: discount_price ? parseFloat(discount_price) : null, image_url, specs: specs || {}, stock: parseInt(stock) || 10 };
       return res.json(tempProducts[idx]);
     }
-    return res.status(404).json({ error: "المنتج غير موجود" });
+    return res.status(404).json({ error: 'المنتج غير موجود' });
   }
   try {
-    const result = await pool.query(
-      'UPDATE products SET title = $1, category = $2, subcategory = $3, price = $4, image_url = $5, specs = $6, stock = $7 WHERE id = $8 RETURNING *',
-      [title, category, subcategory, price, image_url, JSON.stringify(specs || {}), stock, id]
+    const rows = await sql.query(
+      'UPDATE products SET title = $1, category = $2, subcategory = $3, price = $4, discount_price = $5, image_url = $6, specs = $7, stock = $8 WHERE id = $9 RETURNING *',
+      [title, category, subcategory, price, discount_price ? parseFloat(discount_price) : null, image_url, JSON.stringify(specs || {}), stock, id]
     );
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "المنتج غير موجود" });
-    }
-    res.json(result.rows[0]);
+    if (rows.length === 0) return res.status(404).json({ error: 'المنتج غير موجود' });
+    res.json(rows[0]);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "حدث خطأ أثناء تعديل المنتج" });
+    console.error('Update product error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ أثناء تعديل المنتج: ' + error.message });
   }
 });
 
 // 4. Delete product (Admin)
-app.delete('/api/products/:id', async (req, res) => {
+app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  if (!pool) {
+  if (!sql) {
     tempProducts = tempProducts.filter(p => p.id !== parseInt(id));
     return res.json({ success: true });
   }
   try {
-    const result = await pool.query('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: "المنتج غير موجود" });
-    }
+    const rows = await sql.query('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'المنتج غير موجود' });
     res.json({ success: true });
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "حدث خطأ أثناء حذف المنتج" });
+    console.error('Delete product error:', error.message);
+    res.status(500).json({ error: 'حدث خطأ أثناء حذف المنتج: ' + error.message });
   }
 });
+
 
 // 5. Submit new order
 app.post('/api/orders', async (req, res) => {
@@ -308,7 +330,7 @@ app.post('/api/orders', async (req, res) => {
 });
 
 // 6. Get all orders (Admin)
-app.get('/api/orders', async (req, res) => {
+app.get('/api/orders', authenticateToken, async (req, res) => {
   if (!pool) {
     return res.json(tempOrders.slice().reverse());
   }
@@ -322,7 +344,7 @@ app.get('/api/orders', async (req, res) => {
 });
 
 // 7. Get stats (Admin)
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', authenticateToken, async (req, res) => {
   if (!pool) {
     const totalSales = tempOrders.reduce((sum, o) => sum + o.total_price, 0);
     return res.json({
@@ -344,6 +366,120 @@ app.get('/api/stats', async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "حدث خطأ أثناء جلب الإحصائيات" });
+  }
+});
+
+// 8. Categories API Endpoints (GET, POST, PUT, DELETE)
+let tempCategories = [
+  { id: 'gaming', name: '🎮 ألعاب - Gaming', type: 'laptop' },
+  { id: 'ultrabook', name: '💼 خفيف ونحيف - Ultrabook', type: 'laptop' },
+  { id: 'office', name: '🖥️ مكتبي - Office', type: 'laptop' },
+  { id: 'workstation', name: '⚙️ محطة عمل - Workstation', type: 'laptop' },
+  { id: '2in1', name: '🔄 قابل للطي - 2-in-1', type: 'laptop' },
+  { id: 'mouse', name: '🖱️ فأرة - Mouse', type: 'accessory' },
+  { id: 'keyboard', name: '⌨️ لوحة مفاتيح - Keyboard', type: 'accessory' },
+  { id: 'headset', name: '🎧 سماعة - Headset', type: 'accessory' },
+  { id: 'monitor', name: '🖥️ شاشة - Monitor', type: 'accessory' },
+  { id: 'bag', name: '🎒 حقيبة - Bag', type: 'accessory' },
+  { id: 'cooling', name: '🌀 تبريد - Cooling', type: 'accessory' },
+  { id: 'hub', name: '🔌 موزع منافذ - Hub', type: 'accessory' },
+  { id: 'mousepad', name: '⬛ لوحة فأرة - Mousepad', type: 'accessory' }
+];
+
+app.get('/api/categories', async (req, res) => {
+  if (!pool) {
+    return res.json(tempCategories);
+  }
+  try {
+    const result = await pool.query('SELECT * FROM categories');
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "حدث خطأ أثناء جلب التصنيفات" });
+  }
+});
+
+app.post('/api/categories', async (req, res) => {
+  const { id, name, type } = req.body;
+  if (!sql) {
+    const newCat = { id, name, type };
+    tempCategories.push(newCat);
+    return res.status(201).json(newCat);
+  }
+  try {
+    const rows = await sql.query(
+      'INSERT INTO categories (id, name, type) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = $2, type = $3 RETURNING *',
+      [id, name, type]
+    );
+    res.status(201).json(rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "حدث خطأ أثناء إضافة التصنيف" });
+  }
+});
+
+app.delete('/api/categories/:id', async (req, res) => {
+  const { id } = req.params;
+  if (!sql) {
+    tempCategories = tempCategories.filter(c => c.id !== id);
+    return res.json({ success: true });
+  }
+  try {
+    await sql.query('DELETE FROM categories WHERE id = $1', [id]);
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "حدث خطأ أثناء حذف التصنيف" });
+  }
+});
+
+// 9. Settings API (GET all, PUT update one or more)
+const defaultSettings = {
+  admin_user: 'admin',
+  admin_pass: 'alostora2025',
+  whatsapp_number: '9647801814088',
+  phone_number: '+964 780 181 4088',
+  store_address: 'بغداد، شارع الصناعة، مجمع الحاسبات',
+  budget_limit_low: '900',
+  budget_limit_high: '1300'
+};
+let tempSettings = { ...defaultSettings };
+
+app.get('/api/settings', async (req, res) => {
+  if (!sql) {
+    return res.json(tempSettings);
+  }
+  try {
+    const rows = await sql.query('SELECT key, value FROM store_settings');
+    const settings = {};
+    rows.forEach(row => { settings[row.key] = row.value; });
+    res.json(settings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'خطأ أثناء جلب الإعدادات' });
+  }
+});
+
+app.put('/api/settings', async (req, res) => {
+  const updates = req.body;
+  if (!sql) {
+    tempSettings = { ...tempSettings, ...updates };
+    return res.json(tempSettings);
+  }
+  try {
+    for (const [key, value] of Object.entries(updates)) {
+      await sql.query(
+        'INSERT INTO store_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
+        [key, String(value)]
+      );
+    }
+    const rows = await sql.query('SELECT key, value FROM store_settings');
+    const settings = {};
+    rows.forEach(row => { settings[row.key] = row.value; });
+    res.json(settings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'خطأ أثناء حفظ الإعدادات' });
   }
 });
 

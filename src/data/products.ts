@@ -4,6 +4,7 @@ export interface Product {
   category: 'laptop' | 'accessory';
   subcategory: string;
   price: number;
+  discount_price?: number | null;
   image_url: string;
   specs: Record<string, string>;
   stock: number;

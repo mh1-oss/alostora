@@ -1,22 +1,35 @@
+import { neon } from '@neondatabase/serverless';
 import pg from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
 const { Pool } = pg;
-
 const connectionString = process.env.DATABASE_URL;
 
 if (!connectionString) {
   console.warn("⚠️ تحذير: لم يتم تعيين DATABASE_URL في ملف .env. سيتم تعطيل العمليات على قاعدة البيانات حتى تعيينه.");
 }
 
+// Use Neon serverless HTTP driver for all queries (avoids TCP lock issues)
+export const sql = connectionString ? neon(connectionString) : null;
+
+// Keep pg Pool for compatibility (initDB uses it for setup)
 export const pool = connectionString ? new Pool({
   connectionString,
-  ssl: {
-    rejectUnauthorized: false // Required for Neon PostgreSQL serverless connections
-  }
+  ssl: { rejectUnauthorized: false },
+  max: 5,
+  idleTimeoutMillis: 20000,
+  connectionTimeoutMillis: 8000,
 }) : null;
+
+// Handle unexpected pool errors to prevent server crash
+if (pool) {
+  pool.on('error', (err) => {
+    console.error('Unexpected Neon pool error:', err.message);
+  });
+}
+
 
 export async function initDB() {
   if (!pool) return;
@@ -33,6 +46,7 @@ export async function initDB() {
         category VARCHAR(50) NOT NULL,
         subcategory VARCHAR(100),
         price DECIMAL(10, 2) NOT NULL,
+        discount_price DECIMAL(10, 2) DEFAULT NULL,
         image_url TEXT,
         specs JSONB DEFAULT '{}',
         stock INT DEFAULT 10,
@@ -191,6 +205,77 @@ export async function initDB() {
         );
       }
       console.log("🌱 تم إدخال المنتجات الافتراضية بنجاح.");
+    }
+
+    // Create categories table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS categories (
+        id VARCHAR(100) PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(50) NOT NULL
+      );
+    `);
+    console.log("✅ جدول التصنيفات categories جاهز.");
+
+    // Seed categories if empty
+    const catRes = await client.query("SELECT COUNT(*) FROM categories;");
+    const catCount = parseInt(catRes.rows[0].count, 10);
+    if (catCount === 0) {
+      console.log("🌱 جدول التصنيفات فارغ. جاري إضافة التصنيفات الافتراضية...");
+      const initialCategories = [
+        { id: 'gaming', name: '🎮 ألعاب - Gaming', type: 'laptop' },
+        { id: 'ultrabook', name: '💼 خفيف ونحيف - Ultrabook', type: 'laptop' },
+        { id: 'office', name: '🖥️ مكتبي - Office', type: 'laptop' },
+        { id: 'workstation', name: '⚙️ محطة عمل - Workstation', type: 'laptop' },
+        { id: '2in1', name: '🔄 قابل للطي - 2-in-1', type: 'laptop' },
+        { id: 'mouse', name: '🖱️ فأرة - Mouse', type: 'accessory' },
+        { id: 'keyboard', name: '⌨️ لوحة مفاتيح - Keyboard', type: 'accessory' },
+        { id: 'headset', name: '🎧 سماعة - Headset', type: 'accessory' },
+        { id: 'monitor', name: '🖥️ شاشة - Monitor', type: 'accessory' },
+        { id: 'bag', name: '🎒 حقيبة - Bag', type: 'accessory' },
+        { id: 'cooling', name: '🌀 تبريد - Cooling', type: 'accessory' },
+        { id: 'hub', name: '🔌 موزع منافذ - Hub', type: 'accessory' },
+        { id: 'mousepad', name: '⬛ لوحة فأرة - Mousepad', type: 'accessory' }
+      ];
+      for (const cat of initialCategories) {
+        await client.query(
+          "INSERT INTO categories (id, name, type) VALUES ($1, $2, $3);",
+          [cat.id, cat.name, cat.type]
+        );
+      }
+      console.log("🌱 تم إدخال التصنيفات الافتراضية بنجاح.");
+    }
+
+    // Create store_settings table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS store_settings (
+        key VARCHAR(100) PRIMARY KEY,
+        value TEXT NOT NULL
+      );
+    `);
+    console.log("✅ جدول الإعدادات store_settings جاهز.");
+
+    // Seed default settings if empty
+    const settRes = await client.query("SELECT COUNT(*) FROM store_settings;");
+    const settCount = parseInt(settRes.rows[0].count, 10);
+    if (settCount === 0) {
+      console.log("🌱 جدول الإعدادات فارغ. جاري إضافة الإعدادات الافتراضية...");
+      const defaultSettings = [
+        { key: 'admin_user', value: 'admin' },
+        { key: 'admin_pass', value: 'alostora2025' },
+        { key: 'whatsapp_number', value: '9647801814088' },
+        { key: 'phone_number', value: '+964 780 181 4088' },
+        { key: 'store_address', value: 'بغداد، شارع الصناعة، مجمع الحاسبات' },
+        { key: 'budget_limit_low', value: '900' },
+        { key: 'budget_limit_high', value: '1300' }
+      ];
+      for (const s of defaultSettings) {
+        await client.query(
+          "INSERT INTO store_settings (key, value) VALUES ($1, $2);",
+          [s.key, s.value]
+        );
+      }
+      console.log("🌱 تم إدخال الإعدادات الافتراضية بنجاح.");
     }
 
     client.release();
