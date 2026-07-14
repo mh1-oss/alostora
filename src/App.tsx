@@ -2089,11 +2089,11 @@ function App() {
                 </div>
               </div>
 
-              {/* Subtab Navigation */}
-              <div className="flex gap-4 border-b border-gray-250/20 pb-3">
+              {/* Subtab Navigation (Responsive flex-wrap container) */}
+              <div className="flex flex-wrap gap-3.5 border-b border-gray-250/20 pb-3">
                 <button 
                   onClick={() => setAdminSubTab('products')} 
-                  className={`pb-2.5 text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                  className={`pb-2 text-xs md:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
                     adminSubTab === 'products' ? 'border-indigo-650 text-indigo-650' : 'border-transparent text-gray-450 hover:text-gray-700'
                   }`}
                 >
@@ -2101,7 +2101,7 @@ function App() {
                 </button>
                 <button 
                   onClick={() => setAdminSubTab('orders')} 
-                  className={`pb-2.5 text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                  className={`pb-2 text-xs md:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
                     adminSubTab === 'orders' ? 'border-indigo-650 text-indigo-650' : 'border-transparent text-gray-450 hover:text-gray-700'
                   }`}
                 >
@@ -2114,7 +2114,7 @@ function App() {
                 </button>
                 <button 
                   onClick={() => setAdminSubTab('categories')} 
-                  className={`pb-2.5 text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                  className={`pb-2 text-xs md:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
                     adminSubTab === 'categories' ? 'border-indigo-650 text-indigo-650' : 'border-transparent text-gray-450 hover:text-gray-700'
                   }`}
                 >
@@ -2122,7 +2122,7 @@ function App() {
                 </button>
                 <button 
                   onClick={() => setAdminSubTab('shipping')} 
-                  className={`pb-2.5 text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                  className={`pb-2 text-xs md:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
                     adminSubTab === 'shipping' ? 'border-indigo-650 text-indigo-650' : 'border-transparent text-gray-450 hover:text-gray-700'
                   }`}
                 >
@@ -2130,7 +2130,7 @@ function App() {
                 </button>
                 <button 
                   onClick={() => setAdminSubTab('settings')} 
-                  className={`pb-2.5 text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                  className={`pb-2 text-xs md:text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
                     adminSubTab === 'settings' ? 'border-indigo-650 text-indigo-650' : 'border-transparent text-gray-450 hover:text-gray-700'
                   }`}
                 >
