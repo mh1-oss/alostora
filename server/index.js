@@ -288,11 +288,25 @@ function tgPost(botToken, path, body) {
 }
 
 // 5. إرسال طلب جديد (بدون تخزين Neon - كل شيء في التليغرام)
+// 5. إرسال طلب جديد سحابياً في قاعدة بيانات Neon
 app.post('/api/orders', async (req, res) => {
   const { customer_name, customer_phone, customer_address, total_price, items } = req.body;
 
-  const newOrder = {
-    id: Date.now(), // ID فريد بدون DB
+  let insertedOrder = null;
+  if (sql) {
+    try {
+      const rows = await sql.query(
+        'INSERT INTO orders (customer_name, customer_phone, customer_address, total_price, status, items) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [customer_name, customer_phone, customer_address, parseFloat(total_price), 'pending', JSON.stringify(items || [])]
+      );
+      insertedOrder = rows[0];
+    } catch (e) {
+      console.error('[Neon Database Order Insert Failed]:', e.message);
+    }
+  }
+
+  const newOrder = insertedOrder || {
+    id: Date.now(), // Fallback ID if offline
     customer_name,
     customer_phone,
     customer_address,
@@ -301,9 +315,12 @@ app.post('/api/orders', async (req, res) => {
     items,
     created_at: new Date().toISOString()
   };
-  tempOrders.push(newOrder);
 
-  // تحديث الكميات في الذاكرة
+  if (!insertedOrder) {
+    tempOrders.push(newOrder);
+  }
+
+  // تحديث الكميات في قاعدة البيانات أو الذاكرة
   if (pool) {
     try {
       for (const item of items) {
@@ -378,19 +395,38 @@ app.post('/api/orders', async (req, res) => {
   res.status(201).json(newOrder);
 });
 
-// 6. جلب جميع الطلبات (من الذاكرة - بدون Neon)
-app.get('/api/orders', authenticateToken, (req, res) => {
-  res.json(tempOrders.slice().reverse());
+// 6. جلب جميع الطلبات (من قاعدة بيانات Neon أو الذاكرة كبديل)
+app.get('/api/orders', authenticateToken, async (req, res) => {
+  if (!sql) {
+    return res.json(tempOrders.slice().reverse());
+  }
+  try {
+    const result = await sql.query('SELECT * FROM orders ORDER BY id DESC');
+    res.json(result);
+  } catch (error) {
+    console.error('[Fetch Orders Failed]:', error.message);
+    res.status(500).json({ error: 'خطأ أثناء جلب الطلبات: ' + error.message });
+  }
 });
 
-// تحديث حالة الطلب (من الذاكرة)
-app.put('/api/orders/:id/status', authenticateToken, (req, res) => {
+// تحديث حالة الطلب سحابياً
+app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
-  const order = tempOrders.find(o => String(o.id) === String(id));
-  if (!order) return res.status(404).json({ error: 'الطلب غير موجود' });
-  order.status = status;
-  res.json(order);
+  if (!sql) {
+    const order = tempOrders.find(o => String(o.id) === String(id));
+    if (!order) return res.status(404).json({ error: 'الطلب غير موجود' });
+    order.status = status;
+    return res.json(order);
+  }
+  try {
+    const rows = await sql.query('UPDATE orders SET status = $1 WHERE id = $2 RETURNING *', [status, id]);
+    if (rows.length === 0) return res.status(404).json({ error: 'الطلب غير موجود' });
+    res.json(rows[0]);
+  } catch (error) {
+    console.error('[Update Order Status Failed]:', error.message);
+    res.status(500).json({ error: 'خطأ أثناء تحديث حالة الطلب: ' + error.message });
+  }
 });
 
 
@@ -572,7 +608,15 @@ async function processTelegramUpdate(update, botToken, chatId) {
   }
 
   try {
-    // تحديث الحالة في الذاكرة
+    // تحديث الحالة في قاعدة بيانات Neon أو الذاكرة
+    if (sql) {
+      try {
+        await sql.query("UPDATE orders SET status = 'prepared' WHERE id = $1", [order.id]);
+      } catch (dbErr) {
+        console.error('[Telegram Callback DB Update Failed]:', dbErr.message);
+      }
+    }
+
     const memOrder = tempOrders.find(o => String(o.id) === String(order.id));
     if (memOrder) memOrder.status = 'prepared';
 
@@ -659,10 +703,16 @@ async function startTelegramPolling() {
       rows.forEach(r => { s[r.key] = r.value; });
       botToken = s['telegram_bot_token'] || null;
       chatId = s['telegram_chat_id'] || null;
-    } catch(e) {}
+    } catch (err) {
+      console.error('[Telegram Polling Config Fetch Error]:', err.message);
+    }
   };
 
+  // Initial fetch
   await fetchSettings();
+
+  // Fetch settings every 10 seconds to detect admin configuration changes on-the-fly
+  setInterval(fetchSettings, 10000);
 
   const poll = () => {
     if (!botToken) {
