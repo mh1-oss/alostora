@@ -412,22 +412,51 @@ function App() {
 
     let exactMatches = candidates.filter(budgetFilter);
 
+    // Dynamic reason generator based on selected criteria
+    const generateReason = (product: Product, matchesBudget: boolean) => {
+      const parts = [];
+      if (matchesBudget) {
+        parts.push(`يتوافق تماماً مع ميزانيتك (${finderBudget === 'low' ? 'أقل من $900' : finderBudget === 'mid' ? '$900 - $1300' : 'أكثر من $1300'}).`);
+      } else {
+        parts.push(`يمثل أقرب بديل متاح للمواصفات المطلوبة بسعر $${product.price}.`);
+      }
+
+      if (product.subcategory === 'gaming') {
+        parts.push("يقدم كرت شاشة مخصص لتشغيل الألعاب الثقيلة وبرامج المونتاج بسلاسة.");
+      } else if (product.subcategory === 'ultrabook') {
+        parts.push("يتميز بوزن خفيف وتصميم نحيف جداً مثالي للتنقل المستمر وعمر بطارية طويل.");
+      } else {
+        parts.push("يلبي متطلبات الدراسة والعمل المكتبي اليومي بكفاءة عالية وبأفضل قيمة اقتصادية.");
+      }
+      return parts.join(' ');
+    };
+
     if (exactMatches.length > 0) {
       // Sort exact matches: show best specifications first (highest price within budget)
       exactMatches.sort((a, b) => b.price - a.price);
-      setFinderResult(exactMatches[0]);
+      const chosen = exactMatches[0];
+      setFinderResult({ ...chosen, justification: generateReason(chosen, true) } as any);
       setFinderAlternatives(exactMatches.slice(1));
     } else {
-      // Fallback: If no exact matches within budget for this usage, get all laptops of this usage
-      // and sort them by price ascending (to show the most affordable option closest to their budget first)
-      let fallbackCandidates = allLaptops.filter(p => p.subcategory === finderUsage);
-      if (fallbackCandidates.length > 0) {
-        fallbackCandidates.sort((a, b) => a.price - b.price);
-        setFinderResult(fallbackCandidates[0]);
-        setFinderAlternatives(fallbackCandidates.slice(1));
+      // Fallback: search globally within the selected budget if subcategory matches are empty
+      let budgetMatches = allLaptops.filter(budgetFilter);
+      if (budgetMatches.length > 0) {
+        budgetMatches.sort((a, b) => b.price - a.price);
+        const chosen = budgetMatches[0];
+        setFinderResult({ ...chosen, justification: `توصية بديلة تناسب ميزانيتك: ${generateReason(chosen, true)}` } as any);
+        setFinderAlternatives(budgetMatches.slice(1));
       } else {
-        setFinderResult(null);
-        setFinderAlternatives([]);
+        // Ultimate fallback: get most affordable laptop closest to budget
+        let fallbackCandidates = [...allLaptops];
+        fallbackCandidates.sort((a, b) => a.price - b.price);
+        if (fallbackCandidates.length > 0) {
+          const chosen = fallbackCandidates[0];
+          setFinderResult({ ...chosen, justification: generateReason(chosen, false) } as any);
+          setFinderAlternatives(fallbackCandidates.slice(1));
+        } else {
+          setFinderResult(null);
+          setFinderAlternatives([]);
+        }
       }
     }
     setFinderStep(3);
@@ -1253,8 +1282,15 @@ function App() {
                         <div className="flex-1 space-y-4">
                           <div>
                             <h4 className="text-lg font-black text-gray-900 mb-1">{finderResult.title}</h4>
-                            <span className="text-2xl font-black text-indigo-650 block">${finderResult.price}</span>
+                            <span className="text-2xl font-black text-indigo-650 block">{formatProductPrice(finderResult.price)}</span>
                           </div>
+
+                          {/* Dynamic recommendation justification */}
+                          {(finderResult as any).justification && (
+                            <div className="bg-indigo-50/50 border border-indigo-100/60 p-3.5 rounded-xl text-xs text-indigo-905 font-bold leading-relaxed">
+                              🎯 <strong>سبب التوصية:</strong> {(finderResult as any).justification}
+                            </div>
+                          )}
 
                           <div className="bg-white/80 p-4 rounded-xl text-xs space-y-2.5 border border-gray-100/60 shadow-sm">
                             {Object.entries(finderResult.specs).map(([key, val]) => (
@@ -1311,7 +1347,7 @@ function App() {
                                 />
                                 <div className="min-w-0">
                                   <h5 className="font-extrabold text-xs text-gray-950 truncate">{alt.title}</h5>
-                                  <span className="text-[9px] font-bold text-gray-400 block mt-0.5">${alt.price}</span>
+                                  <span className="text-[9px] font-bold text-gray-400 block mt-0.5">{formatProductPrice(alt.price)}</span>
                                 </div>
                               </div>
                               <button 
