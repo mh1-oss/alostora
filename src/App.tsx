@@ -93,6 +93,23 @@ function App() {
       localStorage.setItem('savedAdminPass', pass);
     }
   };
+
+  // Dynamic Budget Limits for Smart Finder (survives refreshes)
+  const [budgetLimitLow, setBudgetLimitLow] = useState<number>(() => {
+    const saved = localStorage.getItem('budgetLimitLow');
+    return saved ? parseInt(saved, 10) : 900;
+  });
+  const [budgetLimitHigh, setBudgetLimitHigh] = useState<number>(() => {
+    const saved = localStorage.getItem('budgetLimitHigh');
+    return saved ? parseInt(saved, 10) : 1300;
+  });
+
+  const updateBudgetLimits = (low: number, high: number) => {
+    setBudgetLimitLow(low);
+    setBudgetLimitHigh(high);
+    localStorage.setItem('budgetLimitLow', low.toString());
+    localStorage.setItem('budgetLimitHigh', high.toString());
+  };
   
   // Bulk Shipping States
   const [bulkShippingRate, setBulkShippingRate] = useState('');
@@ -403,11 +420,11 @@ function App() {
     // Filter by budget
     let budgetFilter = (p: Product) => true;
     if (finderBudget === 'low') {
-      budgetFilter = (p: Product) => p.price < 900;
+      budgetFilter = (p: Product) => p.price < budgetLimitLow;
     } else if (finderBudget === 'mid') {
-      budgetFilter = (p: Product) => p.price >= 900 && p.price <= 1300;
+      budgetFilter = (p: Product) => p.price >= budgetLimitLow && p.price <= budgetLimitHigh;
     } else if (finderBudget === 'high') {
-      budgetFilter = (p: Product) => p.price > 1300;
+      budgetFilter = (p: Product) => p.price > budgetLimitHigh;
     }
 
     let exactMatches = candidates.filter(budgetFilter);
@@ -416,9 +433,9 @@ function App() {
     const generateReason = (product: Product, matchesBudget: boolean) => {
       const parts = [];
       if (matchesBudget) {
-        parts.push(`يتوافق تماماً مع ميزانيتك (${finderBudget === 'low' ? 'أقل من $900' : finderBudget === 'mid' ? '$900 - $1300' : 'أكثر من $1300'}).`);
+        parts.push(`يتوافق تماماً مع ميزانيتك (${finderBudget === 'low' ? `أقل من ${formatProductPrice(budgetLimitLow)}` : finderBudget === 'mid' ? `${formatProductPrice(budgetLimitLow)} - ${formatProductPrice(budgetLimitHigh)}` : `أكثر من ${formatProductPrice(budgetLimitHigh)}`}).`);
       } else {
-        parts.push(`يمثل أقرب بديل متاح للمواصفات المطلوبة بسعر $${product.price}.`);
+        parts.push(`يمثل أقرب بديل متاح للمواصفات المطلوبة بسعر ${formatProductPrice(product.price)}.`);
       }
 
       if (product.subcategory === 'gaming') {
@@ -1204,7 +1221,7 @@ function App() {
                     className="card-glass p-6 text-center cursor-pointer border-gray-100"
                   >
                     <span className="text-3xl block mb-2">💵</span>
-                    <span className="font-extrabold block text-base mb-1">أقل من $900</span>
+                    <span className="font-extrabold block text-base mb-1">أقل من {formatProductPrice(budgetLimitLow)}</span>
                     <span className="text-[11px] text-gray-400">حواسيب دراسية واقتصادية ممتازة</span>
                   </button>
                   <button 
@@ -1212,7 +1229,7 @@ function App() {
                     className="card-glass p-6 text-center cursor-pointer border-gray-100"
                   >
                     <span className="text-3xl block mb-2">💳</span>
-                    <span className="font-extrabold block text-base mb-1">$900 - $1300</span>
+                    <span className="font-extrabold block text-base mb-1">{formatProductPrice(budgetLimitLow)} - {formatProductPrice(budgetLimitHigh)}</span>
                     <span className="text-[11px] text-gray-400">أداء ممتاز جداً للألعاب الخفيفة والتصميم</span>
                   </button>
                   <button 
@@ -1220,7 +1237,7 @@ function App() {
                     className="card-glass p-6 text-center cursor-pointer border-gray-100"
                   >
                     <span className="text-3xl block mb-2">💎</span>
-                    <span className="font-extrabold block text-base mb-1">أكثر من $1300</span>
+                    <span className="font-extrabold block text-base mb-1">أكثر من {formatProductPrice(budgetLimitHigh)}</span>
                     <span className="text-[11px] text-gray-400">أقوى معالجات ورسوميات قيمنق ومونتاج</span>
                   </button>
                 </div>
@@ -2852,6 +2869,43 @@ function App() {
 
                     <div className="bg-gray-50 rounded-xl p-3 text-xs font-bold text-gray-600">
                       معاينة التحويل: $100 = {(100 * exchangeRate).toLocaleString('ar-IQ')} د.ع
+                    </div>
+                  </div>
+
+                  {/* Smart Finder Budget Ranges Config */}
+                  <div className="card-glass flat p-6 bg-white/90 border-white shadow-sm space-y-5">
+                    <h3 className="font-extrabold text-sm text-gray-800 border-b pb-3">🧭 حدود الفئات السعرية للمساعد الذكي</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-gray-700">الحد الفاصل للفئة الاقتصادية (بالدولار $)</label>
+                        <input
+                          type="number"
+                          min="10"
+                          value={budgetLimitLow}
+                          onChange={e => updateBudgetLimits(parseInt(e.target.value, 10) || 900, budgetLimitHigh)}
+                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
+                        />
+                        <p className="text-[10px] text-gray-400">أي جهاز سعره أقل من هذه القيمة يعتبر فئة اقتصادية.</p>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs font-black text-gray-700">الحد الفاصل للفئة العليا (بالدولار $)</label>
+                        <input
+                          type="number"
+                          min="10"
+                          value={budgetLimitHigh}
+                          onChange={e => updateBudgetLimits(budgetLimitLow, parseInt(e.target.value, 10) || 1300)}
+                          className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 font-bold text-xs bg-white"
+                        />
+                        <p className="text-[10px] text-gray-400">أي جهاز سعره أعلى من هذه القيمة يعتبر فئة عليا.</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-indigo-50/50 text-indigo-900 rounded-xl p-3.5 text-[11px] font-bold space-y-1">
+                      <div>💵 الفئة الاقتصادية: أقل من ${budgetLimitLow}</div>
+                      <div>💳 الفئة المتوسطة: بين ${budgetLimitLow} و ${budgetLimitHigh}</div>
+                      <div>💎 الفئة الاحترافية (العليا): أكثر من ${budgetLimitHigh}</div>
                     </div>
                   </div>
 
