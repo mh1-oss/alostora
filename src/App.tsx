@@ -1303,12 +1303,12 @@ function App() {
                     {/* Automated Discounts Section */}
                     {discountedProducts.length > 0 && (
                       <div className="mb-16">
-                        <div className="flex justify-between items-center mb-6 border-b pb-3 border-red-100 bg-gradient-to-r from-red-50/50 to-transparent p-3 rounded-2xl">
-                          <h2 className="text-2xl font-black flex items-center gap-2 text-red-600">
-                            <Flame className="animate-pulse" size={24} />
-                            <span>🔥 أقوى العروض والتخفيضات</span>
-                            <span className="text-xs font-extrabold text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded-full shadow-sm">
-                              {discountedProducts.length} عرض نشط
+                        <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-150">
+                          <h2 className="text-xl font-black flex items-center gap-2 text-gray-850">
+                            <span className="text-red-500">🏷️</span>
+                            <span>أقوى العروض والتخفيضات</span>
+                            <span className="text-[10px] font-bold text-red-500 bg-red-50 border border-red-100/50 px-2.5 py-0.5 rounded-lg">
+                              {discountedProducts.length} {discountedProducts.length === 1 ? 'عرض نشط' : 'عروض نشطة'}
                             </span>
                           </h2>
                         </div>
@@ -1318,36 +1318,83 @@ function App() {
                       </div>
                     )}
 
-                    {homeCats.length > 0 ? (
-                      homeCats.map(cat => {
-                        const catProducts = filteredProducts.filter((p: Product) => p.subcategory === cat.id);
-                        return (
-                          <div key={cat.id} className="mb-16">
+                    {homeCats.length > 0 && homeCats.map(cat => {
+                      const catProducts = filteredProducts.filter((p: Product) => p.subcategory === cat.id);
+                      if (catProducts.length === 0) return null; // Skip rendering empty custom sections
+                      return (
+                        <div key={cat.id} className="mb-16">
+                          <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-150">
+                            <h2 className="text-xl font-black flex items-center gap-2 text-gray-800">
+                              <span>{cat.name}</span>
+                              <span className="text-[10px] font-bold text-gray-500 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded-lg">
+                                {catProducts.length} منتج
+                              </span>
+                            </h2>
+                          </div>
+                          <div className="products-grid">
+                            {catProducts.map((product: Product) => renderProductCard(product))}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    <div className="space-y-16">
+                        {/* Laptops Showcase (Max 5 items) */}
+                        {filteredProducts.filter((p: Product) => p.category === 'laptop').length > 0 && (
+                          <div>
                             <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
                               <h2 className="text-2xl font-black flex items-center gap-2">
-                                <span>{cat.name}</span>
+                                <span>💻 أجهزة لابتوب مميزة</span>
                                 <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
-                                  {catProducts.length} منتج
+                                  {filteredProducts.filter((p: Product) => p.category === 'laptop').length} جهاز متوفر
                                 </span>
                               </h2>
                             </div>
-                            {catProducts.length === 0 ? (
-                              <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
-                                لا تتوفر منتجات في هذا القسم حالياً.
-                              </div>
-                            ) : (
-                              <div className="products-grid">
-                                {catProducts.map((product: Product) => renderProductCard(product))}
-                              </div>
-                            )}
+                            <div className="products-grid">
+                              {filteredProducts
+                                .filter((p: Product) => p.category === 'laptop')
+                                .slice(0, 5)
+                                .map((product: Product) => renderProductCard(product))}
+                            </div>
+                            <div className="flex justify-center mt-8">
+                              <button
+                                onClick={() => { setActiveTab('laptops'); setSelectedSubcategory('all'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                className="btn-premium-glass text-xs py-3 px-8 flex items-center gap-2 shadow-sm font-black border-indigo-200 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50 cursor-pointer"
+                              >
+                                عرض جميع أجهزة اللابتوب ({filteredProducts.filter((p: Product) => p.category === 'laptop').length}) ←
+                              </button>
+                            </div>
                           </div>
-                        );
-                      })
-                    ) : (
-                      <div className="card-glass p-16 text-center text-gray-400 text-xs font-semibold">
-                        لا توجد أقسام رئيسية مضافة للرئيسية بعد. يمكنك إضافة أقسام من لوحة التحكم.
+                        )}
+
+                        {/* Accessories Showcase (Max 5 items) */}
+                        {filteredProducts.filter((p: Product) => p.category === 'accessory').length > 0 && (
+                          <div>
+                            <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
+                              <h2 className="text-2xl font-black flex items-center gap-2">
+                                <span>🎧 إكسسوارات وملحقات احترافية</span>
+                                <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
+                                  {filteredProducts.filter((p: Product) => p.category === 'accessory').length} ملحق متوفر
+                                </span>
+                              </h2>
+                            </div>
+                            <div className="products-grid">
+                              {filteredProducts
+                                .filter((p: Product) => p.category === 'accessory')
+                                .slice(0, 5)
+                                .map((product: Product) => renderProductCard(product))}
+                            </div>
+                            <div className="flex justify-center mt-8">
+                              <button
+                                onClick={() => { setActiveTab('accessories'); setSelectedSubcategory('all'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                className="btn-premium-glass text-xs py-3 px-8 flex items-center gap-2 shadow-sm font-black border-indigo-200 text-indigo-700 bg-indigo-50/50 hover:bg-indigo-50 cursor-pointer"
+                              >
+                                عرض جميع الإكسسوارات والملحقات ({filteredProducts.filter((p: Product) => p.category === 'accessory').length}) ←
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
                   </>
                 );
               })()}
