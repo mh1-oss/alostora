@@ -674,7 +674,11 @@ function App() {
       <div className="float-dot-2"></div>
 
       {/* Modern Premium Header/Navbar */}
-      <nav className="card-glass flat sticky top-4 z-40 mx-4 md:mx-12 my-4 px-6 py-4 flex items-center border-white min-h-[74px]">
+      <nav className={`card-glass flat sticky top-4 z-40 mx-4 md:mx-12 my-4 px-6 py-4 flex items-center border-white min-h-[74px] transition-all duration-350 ${
+        isScrolled 
+          ? 'bg-white/45 backdrop-blur-[28px] shadow-lg shadow-indigo-100/10 border-indigo-100/30' 
+          : 'bg-white/65'
+      }`}>
         <AnimatePresence mode="wait">
           {isSearchOpen ? (
             <motion.div 
