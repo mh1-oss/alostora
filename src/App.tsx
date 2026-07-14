@@ -804,11 +804,22 @@ function App() {
 
   const renderProductCard = (product: Product) => {
     const isCompared = compareList.some((p: Product) => p.id === product.id);
+    const hasDiscount = product.discount_price && Number(product.discount_price) > 0;
+    const discountPercent = hasDiscount 
+      ? Math.round(((product.price - Number(product.discount_price)) / product.price) * 100) 
+      : 0;
+
     return (
-      <div key={product.id} className="card-glass flex flex-col justify-between overflow-hidden relative">
+      <div key={product.id} className={`card-glass flex flex-col justify-between overflow-hidden relative transition-all duration-300 ${hasDiscount ? 'ring-2 ring-red-500/20 border-red-100 hover:border-red-200 shadow-red-50/20' : ''}`}>
         <div className="absolute top-3.5 right-3.5 z-10 px-3 py-1 rounded-full text-[10px] font-bold text-white bg-indigo-600 shadow">
           {product.category === 'laptop' ? 'لابتوب' : 'ملحق'}
         </div>
+        {hasDiscount && (
+          <div className="absolute top-3.5 left-3.5 z-10 px-3 py-1 rounded-full text-[10px] font-black text-white bg-red-500 shadow animate-pulse flex items-center gap-1">
+            <Flame size={10} />
+            <span>خصم {discountPercent}%</span>
+          </div>
+        )}
 
         <div className="p-3.5">
           <div 
@@ -1284,78 +1295,59 @@ function App() {
             <>
               {/* Render dynamic homepage category sections */}
               {(() => {
+                const discountedProducts = filteredProducts.filter((p: Product) => p.discount_price && Number(p.discount_price) > 0);
                 const homeCats = (categories as any[]).filter(c => c.type === 'home');
-                if (homeCats.length > 0) {
-                  return homeCats.map(cat => {
-                    const catProducts = filteredProducts.filter((p: Product) => p.subcategory === cat.id);
-                    return (
-                      <div key={cat.id} className="mb-16">
-                        <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
-                          <h2 className="text-2xl font-black flex items-center gap-2">
-                            <span>{cat.name}</span>
-                            <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
-                              {catProducts.length} منتج
+                
+                return (
+                  <>
+                    {/* Automated Discounts Section */}
+                    {discountedProducts.length > 0 && (
+                      <div className="mb-16">
+                        <div className="flex justify-between items-center mb-6 border-b pb-3 border-red-100 bg-gradient-to-r from-red-50/50 to-transparent p-3 rounded-2xl">
+                          <h2 className="text-2xl font-black flex items-center gap-2 text-red-600">
+                            <Flame className="animate-pulse" size={24} />
+                            <span>🔥 أقوى العروض والتخفيضات</span>
+                            <span className="text-xs font-extrabold text-red-600 bg-red-50 border border-red-200 px-3 py-1 rounded-full shadow-sm">
+                              {discountedProducts.length} عرض نشط
                             </span>
                           </h2>
                         </div>
-                        {catProducts.length === 0 ? (
-                          <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
-                            لا تتوفر منتجات في هذا القسم حالياً.
-                          </div>
-                        ) : (
-                          <div className="products-grid">
-                            {catProducts.map((product: Product) => renderProductCard(product))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  });
-                }
-
-                // Fallback layout if no dynamic home categories exist
-                return (
-                  <>
-                    {/* Laptops Section */}
-                    <div className="mb-16">
-                      <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
-                        <h2 className="text-2xl font-black flex items-center gap-2">
-                          <span>💻 أجهزة لابتوب مميزة</span>
-                          <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
-                            {filteredProducts.filter((p: Product) => p.category === 'laptop').length} جهاز
-                          </span>
-                        </h2>
-                      </div>
-                      {filteredProducts.filter((p: Product) => p.category === 'laptop').length === 0 ? (
-                        <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
-                          لا تتوفر أجهزة لابتوب مطابقة للبحث حالياً.
-                        </div>
-                      ) : (
                         <div className="products-grid">
-                          {filteredProducts.filter((p: Product) => p.category === 'laptop').map((product: Product) => renderProductCard(product))}
+                          {discountedProducts.map((product: Product) => renderProductCard(product))}
                         </div>
-                      )}
-                    </div>
-
-                    {/* Accessories Section */}
-                    <div>
-                      <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
-                        <h2 className="text-2xl font-black flex items-center gap-2">
-                          <span>🎧 إكسسوارات وملحقات احترافية</span>
-                          <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
-                            {filteredProducts.filter((p: Product) => p.category === 'accessory').length} ملحق
-                          </span>
-                        </h2>
                       </div>
-                      {filteredProducts.filter((p: Product) => p.category === 'accessory').length === 0 ? (
-                        <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
-                          لا تتوفر إكسسوارات مطابقة للبحث حالياً.
-                        </div>
-                      ) : (
-                        <div className="products-grid">
-                          {filteredProducts.filter((p: Product) => p.category === 'accessory').map((product: Product) => renderProductCard(product))}
-                        </div>
-                      )}
-                    </div>
+                    )}
+
+                    {homeCats.length > 0 ? (
+                      homeCats.map(cat => {
+                        const catProducts = filteredProducts.filter((p: Product) => p.subcategory === cat.id);
+                        return (
+                          <div key={cat.id} className="mb-16">
+                            <div className="flex justify-between items-center mb-6 border-b pb-3 border-gray-200/40">
+                              <h2 className="text-2xl font-black flex items-center gap-2">
+                                <span>{cat.name}</span>
+                                <span className="text-xs font-extrabold text-gray-500 bg-white border border-gray-150 px-3 py-1 rounded-full shadow-sm">
+                                  {catProducts.length} منتج
+                                </span>
+                              </h2>
+                            </div>
+                            {catProducts.length === 0 ? (
+                              <div className="card-glass p-12 text-center text-gray-400 text-xs font-semibold">
+                                لا تتوفر منتجات في هذا القسم حالياً.
+                              </div>
+                            ) : (
+                              <div className="products-grid">
+                                {catProducts.map((product: Product) => renderProductCard(product))}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div className="card-glass p-16 text-center text-gray-400 text-xs font-semibold">
+                        لا توجد أقسام رئيسية مضافة للرئيسية بعد. يمكنك إضافة أقسام من لوحة التحكم.
+                      </div>
+                    )}
                   </>
                 );
               })()}
@@ -3954,8 +3946,8 @@ function App() {
                     onChange={e => setAdminForm(prev => ({ ...prev, category: e.target.value as any }))}
                     className="w-full px-4 py-2.5 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500/20 bg-white focus:outline-none font-bold text-xs text-right"
                   >
-                    <option value="laptop">لابتوب</option>
-                    <option value="accessory">إكسسوار</option>
+                    {mainCatLaptopName && <option value="laptop">{mainCatLaptopName}</option>}
+                    {mainCatAccessoryName && <option value="accessory">{mainCatAccessoryName}</option>}
                   </select>
                 </div>
 
