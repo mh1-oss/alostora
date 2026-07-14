@@ -30,12 +30,12 @@ app.post('/api/login', async (req, res) => {
   let adminUser = 'admin';
   let adminPass = 'alostora2025';
 
-  if (sql) {
+  if (pool) {
     try {
-      const rows = await sql.query('SELECT value FROM store_settings WHERE key = $1', ['admin_user']);
-      const passRows = await sql.query('SELECT value FROM store_settings WHERE key = $1', ['admin_pass']);
-      if (rows.length > 0) adminUser = rows[0].value;
-      if (passRows.length > 0) adminPass = passRows[0].value;
+      const rows = await pool.query('SELECT value FROM store_settings WHERE key = $1', ['admin_user']);
+      const passRows = await pool.query('SELECT value FROM store_settings WHERE key = $1', ['admin_pass']);
+      if (rows.rows && rows.rows.length > 0) adminUser = rows.rows[0].value;
+      if (passRows.rows && passRows.rows.length > 0) adminPass = passRows.rows[0].value;
     } catch (e) {
       console.error('Fetch settings login error:', e.message);
     }
@@ -209,7 +209,7 @@ app.get('/api/products', async (req, res) => {
 // 2. Add product (Admin)
 app.post('/api/products', authenticateToken, async (req, res) => {
   const { title, category, subcategory, price, discount_price, image_url, specs, stock } = req.body;
-  if (!sql) {
+  if (!pool) {
     const newProduct = {
       id: tempProducts.length ? Math.max(...tempProducts.map(p => p.id)) + 1 : 1,
       title, category, subcategory, price: parseFloat(price), discount_price: discount_price ? parseFloat(discount_price) : null, image_url, specs: specs || {}, stock: parseInt(stock) || 10
@@ -218,11 +218,11 @@ app.post('/api/products', authenticateToken, async (req, res) => {
     return res.status(201).json(newProduct);
   }
   try {
-    const rows = await sql.query(
+    const result = await pool.query(
       'INSERT INTO products (title, category, subcategory, price, discount_price, image_url, specs, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
       [title, category, subcategory, price, discount_price ? parseFloat(discount_price) : null, image_url, JSON.stringify(specs || {}), stock]
     );
-    res.status(201).json(rows[0]);
+    res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error('Add product error:', error.message);
     res.status(500).json({ error: 'حدث خطأ أثناء إضافة المنتج: ' + error.message });
@@ -233,7 +233,7 @@ app.post('/api/products', authenticateToken, async (req, res) => {
 app.put('/api/products/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { title, category, subcategory, price, discount_price, image_url, specs, stock } = req.body;
-  if (!sql) {
+  if (!pool) {
     const idx = tempProducts.findIndex(p => p.id === parseInt(id));
     if (idx !== -1) {
       tempProducts[idx] = { ...tempProducts[idx], title, category, subcategory, price: parseFloat(price), discount_price: discount_price ? parseFloat(discount_price) : null, image_url, specs: specs || {}, stock: parseInt(stock) || 10 };
@@ -242,12 +242,12 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
     return res.status(404).json({ error: 'المنتج غير موجود' });
   }
   try {
-    const rows = await sql.query(
+    const result = await pool.query(
       'UPDATE products SET title = $1, category = $2, subcategory = $3, price = $4, discount_price = $5, image_url = $6, specs = $7, stock = $8 WHERE id = $9 RETURNING *',
       [title, category, subcategory, price, discount_price ? parseFloat(discount_price) : null, image_url, JSON.stringify(specs || {}), stock, id]
     );
-    if (rows.length === 0) return res.status(404).json({ error: 'المنتج غير موجود' });
-    res.json(rows[0]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'المنتج غير موجود' });
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('Update product error:', error.message);
     res.status(500).json({ error: 'حدث خطأ أثناء تعديل المنتج: ' + error.message });
@@ -257,13 +257,13 @@ app.put('/api/products/:id', authenticateToken, async (req, res) => {
 // 4. Delete product (Admin)
 app.delete('/api/products/:id', authenticateToken, async (req, res) => {
   const { id } = req.params;
-  if (!sql) {
+  if (!pool) {
     tempProducts = tempProducts.filter(p => p.id !== parseInt(id));
     return res.json({ success: true });
   }
   try {
-    const rows = await sql.query('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'المنتج غير موجود' });
+    const result = await pool.query('DELETE FROM products WHERE id = $1 RETURNING id', [id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'المنتج غير موجود' });
     res.json({ success: true });
   } catch (error) {
     console.error('Delete product error:', error.message);
@@ -293,13 +293,13 @@ app.post('/api/orders', async (req, res) => {
   const { customer_name, customer_phone, customer_address, total_price, items } = req.body;
 
   let insertedOrder = null;
-  if (sql) {
+  if (pool) {
     try {
-      const rows = await sql.query(
+      const result = await pool.query(
         'INSERT INTO orders (customer_name, customer_phone, customer_address, total_price, status, items) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
         [customer_name, customer_phone, customer_address, parseFloat(total_price), 'pending', JSON.stringify(items || [])]
       );
-      insertedOrder = rows[0];
+      insertedOrder = result.rows[0];
     } catch (e) {
       console.error('[Neon Database Order Insert Failed]:', e.message);
     }
@@ -340,9 +340,9 @@ app.post('/api/orders', async (req, res) => {
   // إرسال إشعار تليغرام وتخزين message_id
   try {
     let botToken = null, chatId = null;
-    if (sql) {
-      const rows = await sql.query("SELECT key, value FROM store_settings WHERE key IN ('telegram_bot_token', 'telegram_chat_id')");
-      const s = {}; rows.forEach(r => { s[r.key] = r.value; });
+    if (pool) {
+      const result = await pool.query("SELECT key, value FROM store_settings WHERE key IN ('telegram_bot_token', 'telegram_chat_id')");
+      const s = {}; result.rows.forEach(r => { s[r.key] = r.value; });
       botToken = s['telegram_bot_token']; chatId = s['telegram_chat_id'];
     }
 
@@ -397,12 +397,12 @@ app.post('/api/orders', async (req, res) => {
 
 // 6. جلب جميع الطلبات (من قاعدة بيانات Neon أو الذاكرة كبديل)
 app.get('/api/orders', authenticateToken, async (req, res) => {
-  if (!sql) {
+  if (!pool) {
     return res.json(tempOrders.slice().reverse());
   }
   try {
-    const result = await sql.query('SELECT * FROM orders ORDER BY id DESC');
-    res.json(result);
+    const result = await pool.query('SELECT * FROM orders ORDER BY id DESC');
+    res.json(result.rows);
   } catch (error) {
     console.error('[Fetch Orders Failed]:', error.message);
     res.status(500).json({ error: 'خطأ أثناء جلب الطلبات: ' + error.message });
@@ -413,16 +413,16 @@ app.get('/api/orders', authenticateToken, async (req, res) => {
 app.put('/api/orders/:id/status', authenticateToken, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
-  if (!sql) {
+  if (!pool) {
     const order = tempOrders.find(o => String(o.id) === String(id));
     if (!order) return res.status(404).json({ error: 'الطلب غير موجود' });
     order.status = status;
     return res.json(order);
   }
   try {
-    const rows = await sql.query('UPDATE orders SET status = $1 WHERE id = $2 RETURNING *', [status, id]);
-    if (rows.length === 0) return res.status(404).json({ error: 'الطلب غير موجود' });
-    res.json(rows[0]);
+    const result = await pool.query('UPDATE orders SET status = $1 WHERE id = $2 RETURNING *', [status, id]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'الطلب غير موجود' });
+    res.json(result.rows[0]);
   } catch (error) {
     console.error('[Update Order Status Failed]:', error.message);
     res.status(500).json({ error: 'خطأ أثناء تحديث حالة الطلب: ' + error.message });
@@ -491,17 +491,17 @@ app.get('/api/categories', async (req, res) => {
 
 app.post('/api/categories', async (req, res) => {
   const { id, name, type } = req.body;
-  if (!sql) {
+  if (!pool) {
     const newCat = { id, name, type };
     tempCategories.push(newCat);
     return res.status(201).json(newCat);
   }
   try {
-    const rows = await sql.query(
+    const result = await pool.query(
       'INSERT INTO categories (id, name, type) VALUES ($1, $2, $3) ON CONFLICT (id) DO UPDATE SET name = $2, type = $3 RETURNING *',
       [id, name, type]
     );
-    res.status(201).json(rows[0]);
+    res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "حدث خطأ أثناء إضافة التصنيف" });
@@ -510,12 +510,12 @@ app.post('/api/categories', async (req, res) => {
 
 app.delete('/api/categories/:id', async (req, res) => {
   const { id } = req.params;
-  if (!sql) {
+  if (!pool) {
     tempCategories = tempCategories.filter(c => c.id !== id);
     return res.json({ success: true });
   }
   try {
-    await sql.query('DELETE FROM categories WHERE id = $1', [id]);
+    await pool.query('DELETE FROM categories WHERE id = $1', [id]);
     res.json({ success: true });
   } catch (error) {
     console.error(error);
@@ -538,13 +538,13 @@ const defaultSettings = {
 let tempSettings = { ...defaultSettings };
 
 app.get('/api/settings', async (req, res) => {
-  if (!sql) {
+  if (!pool) {
     return res.json(tempSettings);
   }
   try {
-    const rows = await sql.query('SELECT key, value FROM store_settings');
+    const result = await pool.query('SELECT key, value FROM store_settings');
     const settings = {};
-    rows.forEach(row => { settings[row.key] = row.value; });
+    result.rows.forEach(row => { settings[row.key] = row.value; });
     res.json(settings);
   } catch (error) {
     console.error(error);
@@ -554,20 +554,20 @@ app.get('/api/settings', async (req, res) => {
 
 app.put('/api/settings', async (req, res) => {
   const updates = req.body;
-  if (!sql) {
+  if (!pool) {
     tempSettings = { ...tempSettings, ...updates };
     return res.json(tempSettings);
   }
   try {
     for (const [key, value] of Object.entries(updates)) {
-      await sql.query(
+      await pool.query(
         'INSERT INTO store_settings (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2',
         [key, String(value)]
       );
     }
-    const rows = await sql.query('SELECT key, value FROM store_settings');
+    const result = await pool.query('SELECT key, value FROM store_settings');
     const settings = {};
-    rows.forEach(row => { settings[row.key] = row.value; });
+    result.rows.forEach(row => { settings[row.key] = row.value; });
     res.json(settings);
   } catch (error) {
     console.error(error);
@@ -609,9 +609,9 @@ async function processTelegramUpdate(update, botToken, chatId) {
 
   try {
     // تحديث الحالة في قاعدة بيانات Neon أو الذاكرة
-    if (sql) {
+    if (pool) {
       try {
-        await sql.query("UPDATE orders SET status = 'prepared' WHERE id = $1", [order.id]);
+        await pool.query("UPDATE orders SET status = 'prepared' WHERE id = $1", [order.id]);
       } catch (dbErr) {
         console.error('[Telegram Callback DB Update Failed]:', dbErr.message);
       }
@@ -690,7 +690,7 @@ async function processTelegramUpdate(update, botToken, chatId) {
 
 
 async function startTelegramPolling() {
-  if (!sql) return; // لا داعي للبوت بدون قاعدة بيانات
+  if (!pool) return; // لا داعي للبوت بدون قاعدة بيانات
 
   let offset = 0;
   let botToken = null;
@@ -698,9 +698,9 @@ async function startTelegramPolling() {
 
   const fetchSettings = async () => {
     try {
-      const rows = await sql.query("SELECT key, value FROM store_settings WHERE key IN ('telegram_bot_token', 'telegram_chat_id')");
+      const result = await pool.query("SELECT key, value FROM store_settings WHERE key IN ('telegram_bot_token', 'telegram_chat_id')");
       const s = {};
-      rows.forEach(r => { s[r.key] = r.value; });
+      result.rows.forEach(r => { s[r.key] = r.value; });
       botToken = s['telegram_bot_token'] || null;
       chatId = s['telegram_chat_id'] || null;
     } catch (err) {

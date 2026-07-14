@@ -1708,7 +1708,7 @@ function App() {
                   {/* Embedded Map */}
                   <div className="rounded-xl overflow-hidden border border-gray-150 relative h-60 shadow-inner">
                     <iframe 
-                      src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d1667.147285627!2d44.442838!3d33.311494!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzPCsDE4JzQxLjQiTiA0NMKwMjYnMzQuMiJF!5e0!3m2!1sar!2siq!4v1689110000000!5m2!1sar!2siq" 
+                      src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d343.83!2d44.4480874!3d33.3092194!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x1557810930fa23bb%3A0x1cfb8cfb59e9fe19!2s3D%20elcetronics!5e0!3m2!1sar!2siq!4v1689110000000!5m2!1sar!2siq" 
                       width="100%" 
                       height="100%" 
                       style={{ border: 0 }} 
@@ -1723,7 +1723,7 @@ function App() {
                   {/* Grid Navigation buttons side-by-side */}
                   <div className="grid grid-cols-2 gap-3">
                     <a 
-                      href="https://waze.com/ul?q=%D8%B9%D9%85%D8%A7%D8%B1%D8%A9%20%D8%A7%D9%84%D9%86%D8%B9%D9%85%D8%A7%D9%86%20%D8%B4%D8%A7%D8%B1%D8%B9%20%D8%A7%D9%84%D8%B5%D9%86%D8%A7%D8%B9%D8%A9&navigate=yes" 
+                      href="https://waze.com/ul?ll=33.3092194,44.4480874&navigate=yes" 
                       target="_blank" 
                       rel="noopener noreferrer"
                       className="flex items-center justify-center gap-1.5 py-2.5 rounded-xl bg-gradient-to-r from-sky-400 to-blue-500 text-white font-extrabold text-[10px] text-center shadow-md shadow-sky-100 hover:-translate-y-0.5 hover:shadow-lg transition-all cursor-pointer"
