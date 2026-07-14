@@ -774,14 +774,13 @@ function App() {
 
               {/* Status indicator, Search & Cart trigger */}
               <div className="flex items-center gap-2.5">
-                {/* Currency Toggle */}
+                {/* Currency Toggle (Hidden on mobile header, shown on desktop) */}
                 <button 
                   onClick={() => setCurrency(c => c === 'USD' ? 'IQD' : 'USD')}
-                  className="p-2 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all flex items-center gap-1.5 cursor-pointer text-xs font-black"
+                  className="hidden md:flex p-2.5 rounded-xl bg-white border border-gray-200 shadow-sm hover:border-indigo-500 hover:text-indigo-600 transition-all items-center gap-1.5 cursor-pointer text-xs font-black"
                   title="تبديل العملة"
                 >
-                  <span className="hidden sm:inline">{currency === 'USD' ? '🇺🇸 USD' : '🇮🇶 IQD'}</span>
-                  <span className="sm:hidden">{currency === 'USD' ? '$' : 'د'}</span>
+                  <span>{currency === 'USD' ? '🇺🇸 USD' : '🇮🇶 IQD'}</span>
                 </button>
 
                 {/* Search trigger button */}
@@ -940,10 +939,37 @@ function App() {
             </button>
             <button 
               onClick={() => { setActiveTab('contact'); setIsMobileMenuOpen(false); }} 
-              className={`py-2.5 text-sm font-extrabold text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'contact' ? 'text-indigo-650' : ''}`}
+              className={`py-2.5 text-sm font-extrabold border-b border-gray-100 text-gray-700 hover:text-indigo-650 transition-colors block text-center w-full cursor-pointer ${activeTab === 'contact' ? 'text-indigo-650' : ''}`}
             >
               اتصل بنا
             </button>
+
+            {/* Mobile Currency Selector */}
+            <div className="w-full pt-3 flex flex-col items-center gap-2">
+              <span className="text-[10px] font-black text-gray-400">عملة عرض الأسعار</span>
+              <div className="flex gap-2.5 w-full max-w-xs">
+                <button
+                  onClick={() => { setCurrency('USD'); setIsMobileMenuOpen(false); }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-black cursor-pointer transition-all border ${
+                    currency === 'USD' 
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
+                      : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  🇺🇸 دولار (USD)
+                </button>
+                <button
+                  onClick={() => { setCurrency('IQD'); setIsMobileMenuOpen(false); }}
+                  className={`flex-1 py-2 rounded-xl text-xs font-black cursor-pointer transition-all border ${
+                    currency === 'IQD' 
+                      ? 'bg-indigo-600 border-indigo-600 text-white shadow-md' 
+                      : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                  }`}
+                >
+                  🇮🇶 دينار (IQD)
+                </button>
+              </div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
