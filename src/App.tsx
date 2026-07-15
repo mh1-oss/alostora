@@ -38,6 +38,11 @@ import {
 import { INITIAL_PRODUCTS, Product } from './data/products';
 import { motion, AnimatePresence } from 'framer-motion';
 
+// Config backend API URL depending on deployment context
+const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  ? ''
+  : 'https://alostora-server.up.railway.app';
+
 function App() {
   // Navigation & UI States
   const [activeTab, setActiveTab] = useState<'home' | 'laptops' | 'accessories' | 'smart-finder' | 'contact' | 'product-detail' | 'admin' | 'cart' | 'my-orders' | 'order-success'>('home');
@@ -109,7 +114,7 @@ function App() {
     if (user) { const u = user.trim(); setSavedAdminUser(u); updates['admin_user'] = u; }
     if (pass) { const p = pass.trim(); setSavedAdminPass(p); updates['admin_pass'] = p; }
     if (Object.keys(updates).length > 0) {
-      try { await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); }
+      try { await fetch(`${API_BASE}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); }
       catch (e) { console.warn('Could not save credentials to DB'); }
     }
   };
@@ -122,7 +127,7 @@ function App() {
     setBudgetLimitLow(low);
     setBudgetLimitHigh(high);
     try {
-      await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ budget_limit_low: low.toString(), budget_limit_high: high.toString() }) });
+      await fetch(`${API_BASE}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ budget_limit_low: low.toString(), budget_limit_high: high.toString() }) });
     } catch (e) { console.warn('Could not save budget limits to DB'); }
   };
 
@@ -141,7 +146,7 @@ function App() {
     if (botToken && botToken.trim()) { updates['telegram_bot_token'] = botToken.trim(); setTelegramBotToken(botToken.trim()); }
     if (chatId && chatId.trim()) { updates['telegram_chat_id'] = chatId.trim(); setTelegramChatId(chatId.trim()); }
     if (Object.keys(updates).length > 0) {
-      try { await fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); }
+      try { await fetch(`${API_BASE}/api/settings`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(updates) }); }
       catch (e) { console.warn('Could not save contact/telegram info to DB'); }
     }
   };
@@ -254,7 +259,7 @@ function App() {
 
   const fetchCategories = async () => {
     try {
-      const response = await fetch('/api/categories');
+      const response = await fetch(`${API_BASE}/api/categories`);
       if (response.ok) {
         const data = await response.json();
         setCategories(data);
@@ -270,7 +275,7 @@ function App() {
   // Fetch store settings (replaces localStorage for all persistent config)
   const fetchSettings = async () => {
     try {
-      const response = await fetch('/api/settings');
+      const response = await fetch(`${API_BASE}/api/settings`);
       if (response.ok) {
         const data = await response.json();
         if (data.admin_user) setSavedAdminUser(data.admin_user);
@@ -294,7 +299,7 @@ function App() {
   const saveMainCategoryName = async (key: string, newName: string) => {
     if (!newName.trim()) return;
     try {
-      const response = await fetch('/api/settings', {
+      const response = await fetch(`${API_BASE}/api/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [key]: newName.trim() })
@@ -310,7 +315,7 @@ function App() {
   // Fetch Products & Backend status
   const fetchProducts = async () => {
     try {
-      const response = await fetch('/api/products');
+      const response = await fetch(`${API_BASE}/api/products`);
       if (response.ok) {
         const data = await response.json();
         setProducts(data);
@@ -329,10 +334,10 @@ function App() {
     const token = sessionStorage.getItem('adminToken');
     if (!token) return;
     try {
-      const ordRes = await fetch('/api/orders', {
+      const ordRes = await fetch(`${API_BASE}/api/orders`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
-      const statsRes = await fetch('/api/stats', {
+      const statsRes = await fetch(`${API_BASE}/api/stats`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (ordRes.ok && statsRes.ok) {
@@ -498,7 +503,7 @@ function App() {
     }
 
     try {
-      await fetch('/api/orders', {
+      await fetch(`${API_BASE}/api/orders`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(orderPayload)
@@ -624,7 +629,7 @@ function App() {
     const inputPass = adminPassword.trim();
     
     try {
-      const res = await fetch('/api/login', {
+      const res = await fetch(`${API_BASE}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: inputUser, password: inputPass })
@@ -720,7 +725,7 @@ function App() {
     };
 
     try {
-      const url = editingProductId ? `/api/products/${editingProductId}` : '/api/products';
+      const url = editingProductId ? `${API_BASE}/api/products/${editingProductId}` : `${API_BASE}/api/products`;
       const method = editingProductId ? 'PUT' : 'POST';
 
       const token = sessionStorage.getItem('adminToken') || '';
@@ -781,7 +786,7 @@ function App() {
 
     try {
       const token = sessionStorage.getItem('adminToken') || '';
-      const response = await fetch(`/api/products/${productToDelete.id}`, { 
+      const response = await fetch(`${API_BASE}/api/products/${productToDelete.id}`, { 
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -800,7 +805,7 @@ function App() {
     if (!categoryToDelete || !categoryToDelete.id) return;
     try {
       const token = sessionStorage.getItem('adminToken') || '';
-      const response = await fetch(`/api/categories/${categoryToDelete.id}`, { 
+      const response = await fetch(`${API_BASE}/api/categories/${categoryToDelete.id}`, { 
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -2800,7 +2805,7 @@ function App() {
                                     onClick={async () => {
                                       const token = sessionStorage.getItem('adminToken') || '';
                                       try {
-                                        const res = await fetch(`/api/orders/${o.id}/status`, {
+                                        const res = await fetch(`${API_BASE}/api/orders/${o.id}/status`, {
                                           method: 'PUT',
                                           headers: {
                                             'Content-Type': 'application/json',
@@ -3894,7 +3899,7 @@ function App() {
               }
               
               try {
-                const response = await fetch('/api/categories', {
+                const response = await fetch(`${API_BASE}/api/categories`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
