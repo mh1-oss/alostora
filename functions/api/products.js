@@ -39,7 +39,7 @@ export async function onRequest(context) {
   if (request.method === 'POST') {
     try {
       const body = await request.json();
-      const { title, category, subcategory, price, image_url, specs, stock } = body;
+      const { title, category, subcategory, price, discount_price, image_url, specs, stock } = body;
 
       if (!client) {
         const newProduct = {
@@ -48,6 +48,7 @@ export async function onRequest(context) {
           category,
           subcategory,
           price: parseFloat(price),
+          discount_price: discount_price ? parseFloat(discount_price) : null,
           image_url,
           specs: specs || {},
           stock: parseInt(stock) || 10
@@ -57,8 +58,8 @@ export async function onRequest(context) {
 
       await client.connect();
       const res = await client.query(
-        'INSERT INTO products (title, category, subcategory, price, image_url, specs, stock) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *',
-        [title, category, subcategory, price, image_url, JSON.stringify(specs || {}), stock]
+        'INSERT INTO products (title, category, subcategory, price, discount_price, image_url, specs, stock) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *',
+        [title, category, subcategory, price, discount_price ? parseFloat(discount_price) : null, image_url, JSON.stringify(specs || {}), stock]
       );
       return new Response(JSON.stringify(res.rows[0]), { status: 201, headers: jsonHeaders });
     } catch (e) {

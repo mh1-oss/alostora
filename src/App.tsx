@@ -38,10 +38,9 @@ import {
 import { INITIAL_PRODUCTS, Product } from './data/products';
 import { motion, AnimatePresence } from 'framer-motion';
 
-// Config backend API URL depending on deployment context
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? ''
-  : 'https://alostora-server.up.railway.app';
+// All API calls use relative paths — handled by Cloudflare Pages Functions (/functions/api/)
+// Railway server is no longer used
+const API_BASE = '';
 
 function App() {
   // Navigation & UI States

@@ -27,16 +27,16 @@ export async function onRequest(context) {
   if (request.method === 'PUT') {
     try {
       const body = await request.json();
-      const { title, category, subcategory, price, image_url, specs, stock } = body;
+      const { title, category, subcategory, price, discount_price, image_url, specs, stock } = body;
 
       if (!client) {
-        return new Response(JSON.stringify({ id, title, category, subcategory, price, image_url, specs, stock }), { headers: jsonHeaders });
+        return new Response(JSON.stringify({ id, title, category, subcategory, price, discount_price, image_url, specs, stock }), { headers: jsonHeaders });
       }
 
       await client.connect();
       const res = await client.query(
-        'UPDATE products SET title = $1, category = $2, subcategory = $3, price = $4, image_url = $5, specs = $6, stock = $7 WHERE id = $8 RETURNING *',
-        [title, category, subcategory, price, image_url, JSON.stringify(specs || {}), stock, id]
+        'UPDATE products SET title = $1, category = $2, subcategory = $3, price = $4, discount_price = $5, image_url = $6, specs = $7, stock = $8 WHERE id = $9 RETURNING *',
+        [title, category, subcategory, price, discount_price ? parseFloat(discount_price) : null, image_url, JSON.stringify(specs || {}), stock, id]
       );
       if (res.rows.length === 0) {
         return new Response(JSON.stringify({ error: "المنتج غير موجود" }), { status: 404, headers: jsonHeaders });
