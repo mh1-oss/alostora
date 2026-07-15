@@ -761,7 +761,7 @@ async function startTelegramPolling() {
 }
 // ─────────────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, async () => {
+app.listen(PORT, '0.0.0.0', async () => {
   console.log(`🚀 الخادم يعمل على المنفذ http://localhost:${PORT}`);
   // تشغيل بوت التليغرام بالـ Polling تلقائياً
   startTelegramPolling();
